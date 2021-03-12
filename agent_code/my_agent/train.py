@@ -30,6 +30,13 @@ def setup_training(self):
     # (s, a, r, s')
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
 
+    self.Q = np.zeros((6, 14 * 2 + 1, 14 * 2 + 1))
+    self.Q[0, :, :14] = 1
+    self.Q[2, :, -14:] = 1
+    self.Q[1, :14, :] = 1
+    self.Q[3, -14:, :] = 1
+
+
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
@@ -75,7 +82,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Store the model
     with open("my-saved-model.pt", "wb") as file:
-        pickle.dump(self.model, file)
+        pickle.dump(self.Q, file)
 
 
 def reward_from_events(self, events: List[str]) -> int:
