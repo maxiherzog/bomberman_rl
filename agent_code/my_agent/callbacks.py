@@ -24,12 +24,11 @@ def setup(self):
     """
     if self.train or not os.path.isfile("my-saved-model.pt"):
         self.logger.info("Setting up model from scratch.")
-        weights = np.random.rand(len(ACTIONS))
-        self.model = weights / weights.sum()
+
     else:
         self.logger.info("Loading model from saved state.")
         with open("my-saved-model.pt", "rb") as file:
-            self.model = pickle.load(file)
+            self.Q = pickle.load(file)
 
 
 def act(self, game_state: dict) -> str:
@@ -49,7 +48,7 @@ def act(self, game_state: dict) -> str:
         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
 
     self.logger.debug("Querying model for action.")
-    return np.random.choice(ACTIONS, p=self.model)
+    return np.random.choice(ACTIONS, p=self.Q)
 
 
 def state_to_features(game_state: dict) -> np.array:
@@ -71,9 +70,17 @@ def state_to_features(game_state: dict) -> np.array:
         return None
 
     # For example, you could construct several channels of equal shape, ...
-    channels = []
-    channels.append(...)
+    if game_state["coins"] != []:
+        distance = game_state["coins"] - game_state["self"][3]
+        closest_index = np.argmin(np.sum(np.abs(distance), axis=1))
+        closest_vector = distance[closest_index]
+    else:
+        closest_vector = [0,0] # treat non-existing coins as [0,0]
+
+
+    #channels = []
+    #channels.append(...)
     # concatenate them as a feature tensor (they must have the same shape), ...
-    stacked_channels = np.stack(channels)
+    #stacked_channels = np.stack(channels)
     # and return them as a vector
-    return stacked_channels.reshape(-1)
+    return closest_vector #stacked_channels.reshape(-1)
