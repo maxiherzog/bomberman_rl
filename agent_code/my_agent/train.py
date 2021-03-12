@@ -31,10 +31,12 @@ def setup_training(self):
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
 
     self.Q = np.zeros((6, 14 * 2 + 1, 14 * 2 + 1))
-    self.Q[0, :, :14] = 1
+    self.Q[0, :,  :14] = 1
     self.Q[2, :, -14:] = 1
-    self.Q[1, :14, :] = 1
+    self.Q[1, :14,  :] = 1
     self.Q[3, -14:, :] = 1
+
+    # Q is zero for non existing coins
 
 
 

@@ -44,11 +44,12 @@ def act(self, game_state: dict) -> str:
     random_prob = .1
     if self.train and random.random() < random_prob:
         self.logger.debug("Choosing action purely at random.")
-        # 80%: walk in any direction. 10% wait. 10% bomb.
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
+        return np.random.choose(ACTIONS)
 
     self.logger.debug("Querying model for action.")
-    return np.random.choice(ACTIONS, p=self.Q)
+    feat = state_to_features(game_state)
+    action_index = np.argmax(self.Q[:, feat[0] + 14, feat[1] + 14])
+    return ACTIONS[action_index]
 
 
 def state_to_features(game_state: dict) -> np.array:
