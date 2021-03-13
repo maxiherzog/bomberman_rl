@@ -2,13 +2,15 @@ import pickle
 import random
 from collections import namedtuple, deque
 from typing import List
+import os
 
 import events as e
 from .callbacks import state_to_features
+from .callbacks import ACTIONS
+import numpy as np
 
 # This is only an example!
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
+Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
 
 # Hyper parameters -- DO modify
 TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
@@ -30,17 +32,35 @@ def setup_training(self):
     # (s, a, r, s')
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
 
-    self.Q = np.zeros((6, 14 * 2 + 1, 14 * 2 + 1))
-    self.Q[0, :,  :14] = 1
-    self.Q[2, :, -14:] = 1
-    self.Q[1, :14,  :] = 1
-    self.Q[3, -14:, :] = 1
+    if os.path.isfile("my-saved-model.pt"):
+        self.logger.info("Retraining from saved state.")
+        with open("my-saved-model.pt", "rb") as file:
+            self.Q = pickle.load(file)
+    else:
+        self.logger.debug(f"Initializing Q")
+        self.Q = np.zeros((len(ACTIONS), 14 * 2 + 1, 14 * 2 + 1, 2, 2))
+        self.Q[0, :, :14] = 1 # OBEN
+        self.Q[0, :, :14,  0, :] = 0
+        self.Q[2, :, -14:] = 1 # UNTEN
+        self.Q[2, :, -14:, 0, :] = 0
+        self.Q[3, :14, :] = 1 # LINKS
+        self.Q[3, :14,  :, :, 0] = 0
+        self.Q[1, -14:, :] = 1 # RECHTS
+        self.Q[1, -14:, :, :, 0] = 0
 
-    # Q is zero for non existing coins
+        #Q is zero for non existing coins
 
+    # measuring
+    self.Q_dists = []
+    self.tot_rewards = []
 
-
-def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
+def game_events_occurred(
+    self,
+    old_game_state: dict,
+    self_action: str,
+    new_game_state: dict,
+    events: List[str],
+):
     """
     Called once per step to allow intermediate rewards based on game events.
 
@@ -57,14 +77,23 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     :param new_game_state: The state the agent is in now.
     :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
     """
-    self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
+    self.logger.debug(
+        f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}'
+    )
 
     # Idea: Add your own events to hand out rewards
     if ...:
         events.append(PLACEHOLDER_EVENT)
 
     # state_to_features is defined in callbacks.py
-    self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward_from_events(self, events)))
+    self.transitions.append(
+        Transition(
+            state_to_features(old_game_state),
+            self_action,
+            state_to_features(new_game_state),
+            reward_from_events(self, events),
+        )
+    )
 
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
@@ -79,13 +108,92 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     :param self: The same object that is passed to all of your callbacks.
     """
-    self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
-    self.transitions.append(Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
+    self.logger.debug(
+        f'Encountered event(s) {", ".join(map(repr, events))} in final step'
+    )
+    self.transitions.append(
+        Transition(
+            state_to_features(last_game_state),
+            last_action,
+            None,
+            reward_from_events(self, events),
+        )
+    )
+
+    tot_reward = 0
+    for trans in self.transitions:
+        tot_reward += trans.reward
+        state_indices = (
+            int(trans.state[0] + 14),
+            int(trans.state[1] + 14),
+            int(trans.state[2]),
+            int(trans.state[3])
+        )
+        if trans.next_state is None:
+            V = 0
+        else:
+            next_state_indices = (
+                int(trans.next_state[0] + 14),
+                int(trans.next_state[1] + 14),
+                int(trans.next_state[2]),
+                int(trans.next_state[3])
+            )
+            V = np.max(
+                self.Q[
+                    :,
+                    next_state_indices[0],
+                    next_state_indices[1],
+                    next_state_indices[2],
+                    next_state_indices[3]
+                ]
+            )  # TODO: SARSA vs Q-Learning V
+        alpha = 0.3
+        gamma = 0.95
+        action_index = ACTIONS.index(trans.action)
+
+        self.Q[
+            action_index,
+            state_indices[0],
+            state_indices[1],
+            state_indices[2],
+            state_indices[3]
+        ] += (
+            alpha
+            * (
+                trans.reward
+                + gamma * V
+                - self.Q[
+                    action_index,
+                    state_indices[0],
+                    state_indices[1],
+                    state_indices[2],
+                    state_indices[3]
+                ]
+            )
+        )
+
 
     # Store the model
     with open("my-saved-model.pt", "wb") as file:
         pickle.dump(self.Q, file)
 
+    #measure
+    Qc = np.zeros((5, 14 * 2 + 1, 14 * 2 + 1, 2, 2))
+    Qc[0, :, :14] = 1 # OBEN
+    Qc[0, :, :14,  0, :] = 0
+    Qc[2, :, -14:] = 1 # UNTEN
+    Qc[2, :, -14:, 0, :] = 0
+    Qc[3, :14, :] = 1 # LINKS
+    Qc[3, :14,  :, :, 0] = 0
+    Qc[1, -14:, :] = 1 # RECHTS
+    Qc[1, -14:, :, :, 0] = 0
+
+    self.tot_rewards.append(tot_reward)
+    with open("rewards.pt", "wb") as file:
+        pickle.dump(self.tot_rewards, file)
+    self.Q_dists.append(np.sum(np.abs(Qc-self.Q)))
+    with open("Q-dists.pt", "wb") as file:
+        pickle.dump(self.Q_dists, file)
 
 def reward_from_events(self, events: List[str]) -> int:
     """
@@ -96,8 +204,11 @@ def reward_from_events(self, events: List[str]) -> int:
     """
     game_rewards = {
         e.COIN_COLLECTED: 1,
-        e.KILLED_OPPONENT: 5,
-        PLACEHOLDER_EVENT: -.1  # idea: the custom event is bad
+        #e.KILLED_OPPONENT: 5,
+        PLACEHOLDER_EVENT: -0.1,  # idea: the custom event is bad
+        e.INVALID_ACTION: -1,
+        e.WAITED: -0.1,
+        #e.KILLED_SELF: -5,
     }
     reward_sum = 0
     for event in events:
