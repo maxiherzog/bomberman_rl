@@ -5,7 +5,7 @@ import random
 import numpy as np
 
 
-ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
+ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT"]#, "BOMB"]
 
 
 def setup(self):
@@ -26,7 +26,6 @@ def setup(self):
         self.logger.info("Setting up model from scratch.")
 
     else:
-        self.logger.info("Loading model from saved state.")
         with open("my-saved-model.pt", "rb") as file:
             self.Q = pickle.load(file)
 
@@ -40,15 +39,38 @@ def act(self, game_state: dict) -> str:
     :param game_state: The dictionary that describes everything on the board.
     :return: The action to take as a string.
     """
-    # todo Exploration vs exploitation
-    random_prob = .1
-    if self.train and random.random() < random_prob:
-        self.logger.debug("Choosing action purely at random.")
-        return np.random.choose(ACTIONS)
 
-    self.logger.debug("Querying model for action.")
     feat = state_to_features(game_state)
-    action_index = np.argmax(self.Q[:, feat[0] + 14, feat[1] + 14])
+    self.logger.debug("Querying model for action with feature " + str(feat))
+    # TODO: Exploration vs exploitation
+
+    # epsilon greedy
+    # epsilon = 0.1
+    # if self.train and random.random() < epsilon:
+    #     self.logger.debug("Choosing action purely at random.")
+    #     return np.random.choice(ACTIONS)
+    #
+
+    # self.logger.debug("Querying model for action with feature " + str(feat))
+    # action_index = np.argmax(
+    #     self.Q[
+    #         :,
+    #         int(feat[0] + 14),
+    #         int(feat[1] + 14),
+    #         int(feat[2]),
+    #         int(feat[3])
+    #     ]
+    # )
+
+    # soft-max
+    ROUNDS = 100000
+    rho = np.clip((1 - game_state["round"]/ROUNDS)*0.7, a_min=1e-3, a_max=0.5) # starte sehr kalt, wegen gutem anfangsQ
+    Qvals = self.Q[:, int(feat[0] + 14), int(feat[1] + 14), int(feat[2]), int(feat[3])]
+    softmax = np.exp(Qvals/rho)/np.sum(np.exp(Qvals/rho))
+    self.logger.debug("softmax:" + str(softmax))
+    action_index = np.random.choice(np.arange(len(ACTIONS)), p=softmax)
+
+    self.logger.debug("ACTION choosen: " + ACTIONS[action_index])
     return ACTIONS[action_index]
 
 
@@ -72,16 +94,26 @@ def state_to_features(game_state: dict) -> np.array:
 
     # For example, you could construct several channels of equal shape, ...
     if game_state["coins"] != []:
-        distance = game_state["coins"] - game_state["self"][3]
+        distance = game_state["coins"] - np.array(game_state["self"][3])
         closest_index = np.argmin(np.sum(np.abs(distance), axis=1))
         closest_vector = distance[closest_index]
     else:
-        closest_vector = [0,0] # treat non-existing coins as [0,0]
+        closest_vector = [0, 0]  # treat non-existing coins as [0,0]
 
+    # check if surrounding tiles are blocked
+    #x_off = [1, -1, 0, 0]
+    #y_off = [0, 0, 1, -1]
+    #blocked = np.zeros(4)
+    #for i in range(len(blocked)):
+    #    blocked[i] = game_state["field"][
+    #        game_state["self"][3][0] + x_off[i], game_state["self"][3][1] + y_off[i]
+    #    ]
 
-    #channels = []
-    #channels.append(...)
+    mod_pos = [game_state["self"][3][0]%2, game_state["self"][3][1]%2]
+
+    # channels = []
+    # channels.append(...)
     # concatenate them as a feature tensor (they must have the same shape), ...
-    #stacked_channels = np.stack(channels)
+    # stacked_channels = np.stack(channels)
     # and return them as a vector
-    return closest_vector #stacked_channels.reshape(-1)
+    return np.concatenate((closest_vector, mod_pos))  # stacked_channels.reshape(-1)

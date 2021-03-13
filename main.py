@@ -102,7 +102,7 @@ def main(argv = None):
     t.start()
 
     # Run one or more games
-    for _ in tqdm(range(args.n_rounds)):
+    for _ in tqdm(range(args.n_rounds), smoothing=0.1):
         if not world.running:
             world.ready_for_restart_flag.wait()
             world.ready_for_restart_flag.clear()
