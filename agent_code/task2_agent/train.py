@@ -38,21 +38,25 @@ def setup_training(self):
             self.Q = pickle.load(file)
     else:
         self.logger.debug(f"Initializing Q")
-        self.Q = np.zeros((len(ACTIONS), 14 * 2 + 1, 14 * 2 + 1, 2, 2))
-        self.Q[0, :, :14] = 1 # OBEN
-        self.Q[0, :, :14,  0, :] = 0
-        self.Q[2, :, -14:] = 1 # UNTEN
-        self.Q[2, :, -14:, 0, :] = 0
-        self.Q[3, :14, :] = 1 # LINKS
-        self.Q[3, :14,  :, :, 0] = 0
-        self.Q[1, -14:, :] = 1 # RECHTS
-        self.Q[1, -14:, :, :, 0] = 0
+        self.Q = np.zeros(
+            (14 * 2 + 1, 14 * 2 + 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, len(ACTIONS)),
+            dtype=np.float32,
+        )
+        # self.Q[0, :, :14] = 1 # OBEN
+        # self.Q[0, :, :14,  0, :] = 0
+        # self.Q[2, :, -14:] = 1 # UNTEN
+        # self.Q[2, :, -14:, 0, :] = 0
+        # self.Q[3, :14, :] = 1 # LINKS
+        # self.Q[3, :14,  :, :, 0] = 0
+        # self.Q[1, -14:, :] = 1 # RECHTS
+        # self.Q[1, -14:, :, :, 0] = 0
 
-        #Q is zero for non existing coins
+        # Q is zero for non existing coins
 
     # measuring
     self.Q_dists = []
     self.tot_rewards = []
+
 
 def game_events_occurred(
     self,
@@ -123,77 +127,41 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     tot_reward = 0
     for trans in self.transitions:
         tot_reward += trans.reward
-        state_indices = (
-            int(trans.state[0] + 14),
-            int(trans.state[1] + 14),
-            int(trans.state[2]),
-            int(trans.state[3])
-        )
+
         if trans.next_state is None:
             V = 0
         else:
-            next_state_indices = (
-                int(trans.next_state[0] + 14),
-                int(trans.next_state[1] + 14),
-                int(trans.next_state[2]),
-                int(trans.next_state[3])
-            )
-            V = np.max(
-                self.Q[
-                    :,
-                    next_state_indices[0],
-                    next_state_indices[1],
-                    next_state_indices[2],
-                    next_state_indices[3]
-                ]
-            )  # TODO: SARSA vs Q-Learning V
+            V = np.max(self.Q[tuple(trans.next_state)])  # TODO: SARSA vs Q-Learning V
         alpha = 0.2
         gamma = 0.9
         action_index = ACTIONS.index(trans.action)
 
-        self.Q[
-            action_index,
-            state_indices[0],
-            state_indices[1],
-            state_indices[2],
-            state_indices[3]
-        ] += (
-            alpha
-            * (
-                trans.reward
-                + gamma * V
-                - self.Q[
-                    action_index,
-                    state_indices[0],
-                    state_indices[1],
-                    state_indices[2],
-                    state_indices[3]
-                ]
-            )
+        self.Q[tuple(trans.state), action_index] += alpha * (
+            trans.reward + gamma * V - self.Q[tuple(trans.state), action_index]
         )
-
 
     # Store the model
     with open(r"model.pt", "wb") as file:
         pickle.dump(self.Q, file)
 
-    #measure
-    Qc = np.zeros((5, 14 * 2 + 1, 14 * 2 + 1, 2, 2))
-    Qc[0, :, :14] = 1 # OBEN
-    Qc[0, :, :14,  0, :] = 0
-    Qc[2, :, -14:] = 1 # UNTEN
-    Qc[2, :, -14:, 0, :] = 0
-    Qc[3, :14, :] = 1 # LINKS
-    Qc[3, :14,  :, :, 0] = 0
-    Qc[1, -14:, :] = 1 # RECHTS
-    Qc[1, -14:, :, :, 0] = 0
+    # measure
+    Qc = np.zeros(self.Q.shape)
+    # Qc[0, :, :14] = 1 # OBEN
+    # Qc[0, :, :14,  0, :] = 0
+    # Qc[2, :, -14:] = 1 # UNTEN
+    # Qc[2, :, -14:, 0, :] = 0
+    # Qc[3, :14, :] = 1 # LINKS
+    # Qc[3, :14,  :, :, 0] = 0
+    # Qc[1, -14:, :] = 1 # RECHTS
+    # Qc[1, -14:, :, :, 0] = 0
 
     self.tot_rewards.append(tot_reward)
     with open("rewards.pt", "wb") as file:
         pickle.dump(self.tot_rewards, file)
-    self.Q_dists.append(np.sum(np.abs(Qc-self.Q)))
+    self.Q_dists.append(np.sum(np.abs(Qc - self.Q)))
     with open("Q-dists.pt", "wb") as file:
         pickle.dump(self.Q_dists, file)
+
 
 def reward_from_events(self, events: List[str]) -> int:
     """
@@ -204,11 +172,13 @@ def reward_from_events(self, events: List[str]) -> int:
     """
     game_rewards = {
         e.COIN_COLLECTED: 1,
-        #e.KILLED_OPPONENT: 5,
+        # e.KILLED_OPPONENT: 5,
         PLACEHOLDER_EVENT: -0.1,  # idea: the custom event is bad
         e.INVALID_ACTION: -1,
         e.WAITED: -0.1,
-        #e.KILLED_SELF: -5,
+        e.CRATE_DESTROYED: 0.5,
+        e.KILLED_SELF: -5,
+        # e.KILLED_SELF: -5,
     }
     reward_sum = 0
     for event in events:
