@@ -85,7 +85,7 @@ def state_to_features(game_state: dict) -> np.array:
 
     # For example, you could construct several channels of equal shape, ...
     if game_state["bombs"] != []:
-        distance = np.mat(game_state["bombs"] - np.array(game_state["self"][3]))
+        distance = np.mat(game_state["bombs"]) - np.array(game_state["self"][3])
         closest_index = np.argmin(
             np.sum(np.abs(distance), axis=1)
         )  # manhattan distance
