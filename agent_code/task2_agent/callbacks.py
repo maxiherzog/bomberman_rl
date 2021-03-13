@@ -5,7 +5,7 @@ import random
 import numpy as np
 
 
-ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT"]#, "BOMB"]
+ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
 
 
 def setup(self):
@@ -42,25 +42,16 @@ def act(self, game_state: dict) -> str:
     """
 
     feat = state_to_features(game_state)
-    self.logger.debug("Querying model for action with feature " + str(feat))
+    self.logger.debug("Querying model for action with feature " + str(tuple(feat)))
     # TODO: Exploration vs exploitation
 
     # epsilon greedy
-    epsilon = 0.05
+    epsilon = 0.1
     if self.train and random.random() < epsilon:
         self.logger.debug("Epsilon-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
 
-
-    action_index = np.argmax(
-        self.Q[
-            :,
-            int(feat[0] + 14),
-            int(feat[1] + 14),
-            int(feat[2]),
-            int(feat[3])
-        ]
-    )
+    action_index = np.argmax(self.Q[tuple(feat)])
 
     # soft-max
     # ROUNDS = 100000
@@ -93,27 +84,53 @@ def state_to_features(game_state: dict) -> np.array:
         return None
 
     # For example, you could construct several channels of equal shape, ...
-    if game_state["coins"] != []:
-        distance = game_state["coins"] - np.array(game_state["self"][3])
-        closest_index = np.argmin(np.sum(np.abs(distance), axis=1))
-        closest_vector = distance[closest_index]
+    if game_state["bombs"] != []:
+        distance = np.mat(game_state["bombs"] - np.array(game_state["self"][3]))
+        closest_index = np.argmin(
+            np.sum(np.abs(distance), axis=1)
+        )  # manhattan distance
+        closest_bomb = distance[closest_index] + 14
     else:
-        closest_vector = [0, 0]  # treat non-existing coins as [0,0]
+        closest_bomb = [0, 0]  # treat non-existing coins as [0,0]
 
-    # check if surrounding tiles are blocked
-    #x_off = [1, -1, 0, 0]
-    #y_off = [0, 0, 1, -1]
-    #blocked = np.zeros(4)
-    #for i in range(len(blocked)):
-    #    blocked[i] = game_state["field"][
-    #        game_state["self"][3][0] + x_off[i], game_state["self"][3][1] + y_off[i]
-    #    ]
+    # For example, you could construct several channels of equal shape, ...
+    # if game_state["coins"] != []:
+    #     distance = game_state["coins"] - np.array(game_state["self"][3])
+    #     closest_index = np.argmin(np.sum(np.abs(distance), axis=1))
+    #     closest_coin = distance[closest_index]
+    # else:
+    #     closest_coin = [0, 0]  # treat non-existing coins as [0,0]
 
-    mod_pos = [game_state["self"][3][0]%2, game_state["self"][3][1]%2]
+    # check surrounding tiles
+    x_off = [1, -1, 0, 0, 1, 1, -1, -1, 2, -2, 0, 0]
+    y_off = [0, 0, 1, -1, 1, -1, 1, -1, 0, 0, 2, -2]
+    around_me = np.zeros(len(x_off))
+    for i in range(len(around_me)):
+        if (
+            game_state["self"][3][0] + x_off[i] > 16
+            or game_state["self"][3][0] + x_off[i] < 0
+        ):
+            around_me[i] = 0
+        elif (
+            game_state["self"][3][1] + y_off[i] > 16
+            or game_state["self"][3][1] + y_off[i] < 0
+        ):
+            around_me[i] = 0
+        else:
+            around_me[i] = (
+                game_state["field"][
+                    game_state["self"][3][0] + x_off[i],
+                    game_state["self"][3][1] + y_off[i],
+                ]
+                + 1
+            )
+
+    # mod_pos = [game_state["self"][3][0]%2, game_state["self"][3][1]%2]
 
     # channels = []
     # channels.append(...)
     # concatenate them as a feature tensor (they must have the same shape), ...
     # stacked_channels = np.stack(channels)
     # and return them as a vector
-    return np.concatenate((closest_vector, mod_pos))  # stacked_channels.reshape(-1)
+    return np.concatenate((closest_bomb, around_me)).astype(int)
+    # stacked_channels.reshape(-1)
