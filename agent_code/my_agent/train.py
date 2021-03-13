@@ -32,9 +32,9 @@ def setup_training(self):
     # (s, a, r, s')
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
 
-    if os.path.isfile("my-saved-model.pt"):
+    if os.path.isfile("model.pt"):
         self.logger.info("Retraining from saved state.")
-        with open("my-saved-model.pt", "rb") as file:
+        with open("model.pt", "rb") as file:
             self.Q = pickle.load(file)
     else:
         self.logger.debug(f"Initializing Q")
@@ -147,8 +147,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                     next_state_indices[3]
                 ]
             )  # TODO: SARSA vs Q-Learning V
-        alpha = 0.3
-        gamma = 0.95
+        alpha = 0.2
+        gamma = 0.9
         action_index = ACTIONS.index(trans.action)
 
         self.Q[
@@ -174,7 +174,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
 
     # Store the model
-    with open("my-saved-model.pt", "wb") as file:
+    with open(r"model.pt", "wb") as file:
         pickle.dump(self.Q, file)
 
     #measure
