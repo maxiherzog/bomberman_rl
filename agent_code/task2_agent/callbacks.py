@@ -79,17 +79,27 @@ def state_to_features(game_state: dict) -> np.array:
     :param game_state:  A dictionary describing the current game board.
     :return: np.array
     """
+    # WIRD IM MOMENT 3 MAL AUSGEFÜHRT
+
     # This is the dict before the game begins and after it ends
     if game_state is None:
         return None
 
     # For example, you could construct several channels of equal shape, ...
+    # TODO: channels?
+
+    print(game_state["bombs"])
     if game_state["bombs"] != []:
-        distance = np.mat(game_state["bombs"]) - np.array(game_state["self"][3])
-        closest_index = np.argmin(
-            np.sum(np.abs(distance), axis=1)
-        )  # manhattan distance
-        closest_bomb = distance[closest_index] + 14
+        # bombs_dist = np.matrix(game_state["bombs"][:, 0])
+        # print(bombs_dist)
+        # distance = bombs_dist - np.array(game_state["self"][3])
+        # closest_index = np.argmin(
+        #     np.sum(np.abs(distance), axis=1)
+        # )  # manhattan distance
+        # closest_bomb = distance[closest_index] + 14
+        # TODO: schlechter fix for now, immer nur eine Bombe(die eigene) in Task 2
+        # deswegen:
+        closest_bomb = game_state["bombs"][0][0] - np.array(game_state["self"][3])
     else:
         closest_bomb = [0, 0]  # treat non-existing coins as [0,0]
 
