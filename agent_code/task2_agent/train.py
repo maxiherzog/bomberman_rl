@@ -3,6 +3,7 @@ import random
 from collections import namedtuple, deque
 from typing import List
 import os
+import scipy.sparse as sp
 
 import events as e
 from .callbacks import state_to_features
@@ -39,9 +40,10 @@ def setup_training(self):
     else:
         self.logger.debug(f"Initializing Q")
         self.Q = np.zeros(
-            (14 * 2 + 1, 14 * 2 + 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, len(ACTIONS)),
+            (14 * 2 + 1, 14 * 2 + 1, 4, 3, 3, 3, 3, 3, 3, 3, 3, len(ACTIONS)),
             dtype=np.float32,
         )
+        # self.Q = sp.coo_matrix(self.Q)  # turn into sparse # DOENST WORK
         # self.Q[0, :, :14] = 1 # OBEN
         # self.Q[0, :, :14,  0, :] = 0
         # self.Q[2, :, -14:] = 1 # UNTEN
@@ -140,6 +142,13 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             trans.reward + gamma * V - self.Q[tuple(trans.state), action_index]
         )
 
+        # get all symmetries
+        origin_vec = np.concatenate((trans.state, [action_index]))
+        rot_vec = rotate_index_vector(origin_vec)
+        for i in range(0, 2):
+            self.Q[tuple(rot_vec)] = self.Q[tuple(origin_vec)]
+            rot_vec = rotate_index_vector(rot_vec)
+
     # Store the model
     with open(r"model.pt", "wb") as file:
         pickle.dump(self.Q, file)
@@ -186,3 +195,32 @@ def reward_from_events(self, events: List[str]) -> int:
             reward_sum += game_rewards[event]
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
+
+
+#### UTILITY FUNCTIONS
+
+
+def rotate_index_vector(index_vector):
+    """
+    Rotates the state vector 90 degrees clockwise.
+    """
+
+    if index_vector[11] <= 3:  # DIRECTIONAL ACTION -> add 1
+        action_index = (index_vector[11] + 1) % 4
+    else:
+        action_index = index_vector[11]  # BOMB and WAIT invariant
+
+    return (
+        -index_vector[1],  # bomb position y->-x
+        index_vector[0],  # x->y
+        index_vector[2],  # bomb ticker invariant
+        index_vector[6 + 3],  # surrounding
+        index_vector[7 + 3],
+        index_vector[0 + 3],
+        index_vector[1 + 3],
+        index_vector[2 + 3],
+        index_vector[3 + 3],
+        index_vector[4 + 3],
+        index_vector[5 + 3],
+        action_index,
+    )

@@ -88,7 +88,6 @@ def state_to_features(game_state: dict) -> np.array:
     # For example, you could construct several channels of equal shape, ...
     # TODO: channels?
 
-    print(game_state["bombs"])
     if game_state["bombs"] != []:
         # bombs_dist = np.matrix(game_state["bombs"][:, 0])
         # print(bombs_dist)
@@ -100,8 +99,10 @@ def state_to_features(game_state: dict) -> np.array:
         # TODO: schlechter fix for now, immer nur eine Bombe(die eigene) in Task 2
         # deswegen:
         closest_bomb = game_state["bombs"][0][0] - np.array(game_state["self"][3])
+        bomb_ticker = game_state["bombs"][0][1]
     else:
         closest_bomb = [0, 0]  # treat non-existing coins as [0,0]
+        bomb_ticker = 3
 
     # For example, you could construct several channels of equal shape, ...
     # if game_state["coins"] != []:
@@ -112,8 +113,8 @@ def state_to_features(game_state: dict) -> np.array:
     #     closest_coin = [0, 0]  # treat non-existing coins as [0,0]
 
     # check surrounding tiles
-    x_off = [1, -1, 0, 0, 1, 1, -1, -1, 2, -2, 0, 0]
-    y_off = [0, 0, 1, -1, 1, -1, 1, -1, 0, 0, 2, -2]
+    x_off = [0, 1, 1, 1, 0, -1, -1, -1]  # , 2, -2, 0, 0]
+    y_off = [1, 1, 0, -1, -1, -1, 0, 1]  # , 0, 0, 2, -2]
     around_me = np.zeros(len(x_off))
     for i in range(len(around_me)):
         if (
@@ -142,5 +143,5 @@ def state_to_features(game_state: dict) -> np.array:
     # concatenate them as a feature tensor (they must have the same shape), ...
     # stacked_channels = np.stack(channels)
     # and return them as a vector
-    return np.concatenate((closest_bomb, around_me)).astype(int)
+    return np.concatenate((closest_bomb, [bomb_ticker], around_me)).astype(int)
     # stacked_channels.reshape(-1)
