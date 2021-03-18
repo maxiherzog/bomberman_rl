@@ -51,7 +51,7 @@ def act(self, game_state: dict) -> str:
         self.logger.debug("Epsilon-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
 
-    action_index = np.argmax(self.Q[tuple(feat)])
+    action_index = np.argmax(self.Q.get_last_splice(feat))
 
     # soft-max
     # ROUNDS = 100000
@@ -98,10 +98,12 @@ def state_to_features(game_state: dict) -> np.array:
         # closest_bomb = distance[closest_index] + 14
         # TODO: schlechter fix for now, immer nur eine Bombe(die eigene) in Task 2
         # deswegen:
-        closest_bomb = game_state["bombs"][0][0] - np.array(game_state["self"][3])
+        closest_bomb = (
+            game_state["bombs"][0][0] - np.array(game_state["self"][3]) + np.full(2, 14)
+        )
         bomb_ticker = game_state["bombs"][0][1]
     else:
-        closest_bomb = [0, 0]  # treat non-existing coins as [0,0]
+        closest_bomb = [14, 14]  # treat non-existing bombs as [0,0]
         bomb_ticker = 3
 
     # For example, you could construct several channels of equal shape, ...
