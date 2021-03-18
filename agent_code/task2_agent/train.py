@@ -8,6 +8,7 @@ import scipy.sparse as sp
 import events as e
 from .callbacks import state_to_features
 from .callbacks import ACTIONS
+from .callbacks import get_all_rotations
 import numpy as np
 from .sparseTensor import SparseTensor
 
@@ -22,7 +23,7 @@ TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
 # Events
-PLACEHOLDER_EVENT = "PLACEHOLDER"
+EVADED_BOMB = "EVADED_BOMB"
 
 
 def setup_training(self):
@@ -43,9 +44,8 @@ def setup_training(self):
             self.Q = pickle.load(file)
     else:
         self.logger.debug(f"Initializing Q")
-        self.Q = SparseTensor(
-            [14 * 2 + 1, 14 * 2 + 1, 4, 3, 3, 3, 3, 3, 3, 3, 3, len(ACTIONS)]
-        )
+        self.Q = SparseTensor([14 * 2 + 1, 14 * 2 + 1, 4, 3, 3, 3, 3, len(ACTIONS)])
+        # self.Q = SparseTensor([14 * 2 + 1, 14 * 2 + 1, 4, 3, 3, 3, 3, 3, 3, 3, 3, len(ACTIONS)])
 
     # measuring
     self.Q_dists = []
@@ -80,8 +80,10 @@ def game_events_occurred(
     )
 
     # Idea: Add your own events to hand out rewards
-    if ...:
-        events.append(PLACEHOLDER_EVENT)
+    # if ...:
+    #     events.append(PLACEHOLDER_EVENT)
+    if e.BOMB_EXPLODED in events and not e.KILLED_SELF in events:
+        events.append(EVADED_BOMB)
 
     # state_to_features is defined in callbacks.py
     self.transitions.append(
@@ -162,11 +164,11 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     # Qc[1, -14:, :, :, 0] = 0
 
     self.tot_rewards.append(tot_reward)
-    with open("rewards.pt", "wb") as file:
+    with open("analysis/rewards.pt", "wb") as file:
         pickle.dump(self.tot_rewards, file)
-    # self.Q_dists.append(np.sum(np.abs(Qc - self.Q)))
-    # with open("Q-dists.pt", "wb") as file:
-    #    pickle.dump(self.Q_dists, file)
+    self.Q_dists.append(np.sum(self.Q.get_all()))
+    with open("analysis/Q-dists.pt", "wb") as file:
+        pickle.dump(self.Q_dists, file)
 
 
 def reward_from_events(self, events: List[str]) -> int:
@@ -179,11 +181,12 @@ def reward_from_events(self, events: List[str]) -> int:
     game_rewards = {
         e.COIN_COLLECTED: 1,
         # e.KILLED_OPPONENT: 5,
-        PLACEHOLDER_EVENT: -0.1,  # idea: the custom event is bad
         e.INVALID_ACTION: -1,
         e.WAITED: -0.1,
         e.CRATE_DESTROYED: 0.5,
-        e.KILLED_SELF: -5,
+        e.KILLED_SELF: -1,
+        e.BOMB_DROPPED: 0.3,
+        EVADED_BOMB: 1
         # e.KILLED_SELF: -5,
     }
     reward_sum = 0
@@ -192,70 +195,3 @@ def reward_from_events(self, events: List[str]) -> int:
             reward_sum += game_rewards[event]
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
-
-
-#### UTILITY FUNCTIONS
-
-
-def get_all_rotations(index_vector):
-    rots = [index_vector, flip(index_vector)]
-    for i in range(0, 3):
-        index_vector = rotate(index_vector)
-        rots.append(index_vector)
-        index_vector = flip(index_vector)
-        rots.append(index_vector)
-    return rots
-
-
-def rotate(index_vector):
-    """
-    Rotates the state vector 90 degrees clockwise.
-    """
-
-    if index_vector[11] <= 3:  # DIRECTIONAL ACTION -> add 1
-        action_index = (index_vector[11] + 1) % 4
-    else:
-        action_index = index_vector[11]  # BOMB and WAIT invariant
-
-    return (
-        -index_vector[1] + 28,  # bomb position y->-x
-        index_vector[0],  # x->y
-        index_vector[2],  # bomb ticker invariant
-        index_vector[6 + 3],  # surrounding
-        index_vector[7 + 3],
-        index_vector[0 + 3],
-        index_vector[1 + 3],
-        index_vector[2 + 3],
-        index_vector[3 + 3],
-        index_vector[4 + 3],
-        index_vector[5 + 3],
-        action_index,
-    )
-
-
-def flip(index_vector):
-    """
-    Flips the state vector left to right.
-    """
-
-    if index_vector[11] == 1:  # DIRECTIONAL ACTION -> add 1
-        action_index = 3
-    elif index_vector[11] == 3:
-        action_index = 1
-    else:
-        action_index = index_vector[11]  # UP, DOWN, BOMB and WAIT invariant
-
-    return (
-        -index_vector[0] + 28,  # bomb position x->-x
-        index_vector[1],  # y->y
-        index_vector[2],  # bomb ticker invariant
-        index_vector[0 + 3],  # surrounding
-        index_vector[7 + 3],
-        index_vector[6 + 3],
-        index_vector[5 + 3],
-        index_vector[4 + 3],
-        index_vector[3 + 3],
-        index_vector[2 + 3],
-        index_vector[1 + 3],
-        action_index,
-    )

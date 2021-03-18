@@ -9,7 +9,7 @@ CRATE_DENSITY = 0.75
 MAX_AGENTS = 1
 
 # Round properties
-MAX_STEPS = 400
+MAX_STEPS = 50
 
 # GUI properties
 GRID_SIZE = 30
@@ -17,7 +17,7 @@ WIDTH = 1000
 HEIGHT = 600
 GRID_OFFSET = [(HEIGHT - ROWS * GRID_SIZE) // 2] * 2
 
-AGENT_COLORS = ['blue', 'green', 'yellow', 'pink']
+AGENT_COLORS = ["blue", "green", "yellow", "pink"]
 
 # Game rules
 BOMB_POWER = 3
@@ -31,12 +31,12 @@ REWARD_COIN = 1
 
 # User input
 INPUT_MAP = {
-    pygame.K_UP: 'UP',
-    pygame.K_DOWN: 'DOWN',
-    pygame.K_LEFT: 'LEFT',
-    pygame.K_RIGHT: 'RIGHT',
-    pygame.K_RETURN: 'WAIT',
-    pygame.K_SPACE: 'BOMB',
+    pygame.K_UP: "UP",
+    pygame.K_DOWN: "DOWN",
+    pygame.K_LEFT: "LEFT",
+    pygame.K_RIGHT: "RIGHT",
+    pygame.K_RETURN: "WAIT",
+    pygame.K_SPACE: "BOMB",
 }
 
 # Logging levels

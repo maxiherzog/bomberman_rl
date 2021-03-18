@@ -46,14 +46,29 @@ def act(self, game_state: dict) -> str:
     # TODO: Exploration vs exploitation
 
     # epsilon greedy
-    epsilon = 0.1
+    epsilon = 0.05
     if self.train and random.random() < epsilon:
         self.logger.debug("Epsilon-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
 
-    action_index = np.argmax(self.Q.get_last_splice(feat))
+    # get all symmetries
+    Qs = []
+    for act in range(len(ACTIONS)):
+        origin_vec = np.concatenate((feat, [act]))
+        # encountered_symmetry = False
+        for rot in get_all_rotations(origin_vec):
+            if self.Q.already_exists(rot):
+                # encountered_symmetry = True
+                Qs.append(self.Q.get_entry(rot))
+                break
+        else:
+            Qs.append(0)
+        # if not encountered_symmetry:
+
+    action_index = np.random.choice(np.flatnonzero(Qs == np.max(Qs)))
 
     # soft-max
+
     # ROUNDS = 100000
     # rho = np.clip((1 - game_state["round"]/ROUNDS)*0.7, a_min=1e-3, a_max=0.5) # starte sehr kalt, wegen gutem anfangsQ
     # Qvals = self.Q[:, int(feat[0] + 14), int(feat[1] + 14), int(feat[2]), int(feat[3])]
@@ -115,8 +130,10 @@ def state_to_features(game_state: dict) -> np.array:
     #     closest_coin = [0, 0]  # treat non-existing coins as [0,0]
 
     # check surrounding tiles
-    x_off = [0, 1, 1, 1, 0, -1, -1, -1]  # , 2, -2, 0, 0]
-    y_off = [1, 1, 0, -1, -1, -1, 0, 1]  # , 0, 0, 2, -2]
+    # x_off = [0, 1, 1, 1, 0, -1, -1, -1]  # , 2, -2, 0, 0]
+    # y_off = [1, 1, 0, -1, -1, -1, 0, 1]  # , 0, 0, 2, -2]
+    x_off = [0, 1, 0, -1]  # , 2, -2, 0, 0]
+    y_off = [1, 0, -1, 0]  # , 0, 0, 2, -2]
     around_me = np.zeros(len(x_off))
     for i in range(len(around_me)):
         if (
@@ -147,3 +164,78 @@ def state_to_features(game_state: dict) -> np.array:
     # and return them as a vector
     return np.concatenate((closest_bomb, [bomb_ticker], around_me)).astype(int)
     # stacked_channels.reshape(-1)
+
+
+#### UTILITY FUNCTIONS
+
+
+def get_all_rotations(index_vector):
+    rots = [index_vector, flip(index_vector)]
+    for i in range(0, 3):
+        index_vector = rotate(index_vector)
+        rots.append(index_vector)
+        index_vector = flip(index_vector)
+        rots.append(index_vector)
+    return rots
+
+
+def rotate(index_vector):
+    """
+    Rotates the state vector 90 degrees clockwise.
+    """
+    # 11
+    if index_vector[7] <= 3:  # DIRECTIONAL ACTION -> add 1
+        action_index = (index_vector[7] + 1) % 4
+    else:
+        action_index = index_vector[7]  # BOMB and WAIT invariant
+
+    return (
+        -index_vector[1] + 28,  # bomb position y->-x
+        index_vector[0],  # x->y
+        index_vector[2],  # bomb ticker invariant
+        # index_vector[6 + 3],  # surrounding
+        # index_vector[7 + 3],
+        # index_vector[0 + 3],
+        # index_vector[1 + 3],
+        # index_vector[2 + 3],
+        # index_vector[3 + 3],
+        # index_vector[4 + 3],
+        # index_vector[5 + 3],
+        index_vector[3 + 3],  # surrounding
+        index_vector[0 + 3],
+        index_vector[1 + 3],
+        index_vector[2 + 3],
+        action_index,
+    )
+
+
+def flip(index_vector):
+    """
+    Flips the state vector left to right.
+    """
+
+    if index_vector[7] == 1:  # DIRECTIONAL ACTION -> add 1
+        action_index = 3
+    elif index_vector[7] == 3:
+        action_index = 1
+    else:
+        action_index = index_vector[7]  # UP, DOWN, BOMB and WAIT invariant
+
+    return (
+        -index_vector[0] + 28,  # bomb position x->-x
+        index_vector[1],  # y->y
+        index_vector[2],  # bomb ticker invariant
+        # index_vector[0 + 3],  # surrounding
+        # index_vector[7 + 3],
+        # index_vector[6 + 3],
+        # index_vector[5 + 3],
+        # index_vector[4 + 3],
+        # index_vector[3 + 3],
+        # index_vector[2 + 3],
+        # index_vector[1 + 3],
+        index_vector[0 + 3],  # surrounding
+        index_vector[3 + 3],
+        index_vector[2 + 3],
+        index_vector[1 + 3],
+        action_index,
+    )

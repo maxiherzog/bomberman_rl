@@ -9,9 +9,12 @@ import numpy as np
 
 class SparseTensor:
     def __init__(self, dimensions):
+        self.dimensions = dimensions
         self.values = []
         self.indices = []
-        self.dimensions = dimensions
+
+    def get_all(self):
+        return self.values
 
     def add_entry(self, index, value):
         if self.already_exists(index):
