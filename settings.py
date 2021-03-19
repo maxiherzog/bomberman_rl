@@ -9,7 +9,7 @@ CRATE_DENSITY = 0.75
 MAX_AGENTS = 1
 
 # Round properties
-MAX_STEPS = 50
+MAX_STEPS = 150
 
 # GUI properties
 GRID_SIZE = 30

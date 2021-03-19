@@ -127,37 +127,40 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     )
 
     tot_reward = 0
+    counter = 0
     for trans in self.transitions:
-        tot_reward += trans.reward
+        if trans.action != None:
+            counter += 1
+            tot_reward += trans.reward
 
-        if trans.next_state is None:
-            V = 0
-        else:
-            V = np.max(
-                # self.Q.get_last_splice(trans.next_state)
-                self.Q[tuple(trans.next_state)]
-            )  # TODO: SARSA vs Q-Learning V
-        alpha = 0.2
-        gamma = 0.9
-        action_index = ACTIONS.index(trans.action)
+            if trans.next_state is None:
+                V = 0
+            else:
+                V = np.max(
+                    # self.Q.get_last_splice(trans.next_state)
+                    self.Q[tuple(trans.next_state)]
+                )  # TODO: SARSA vs Q-Learning V
+            alpha = 0.1
+            gamma = 0.9
+            action_index = ACTIONS.index(trans.action)
 
-        # get all symmetries
-        origin_vec = np.concatenate((trans.state, [action_index]))
-        encountered_symmetry = False
-        for rot in get_all_rotations(origin_vec):
-            # if self.Q.already_exists(rot):
-            #     entry = self.Q.get_entry(rot)
-            #     self.Q.change_value(
-            #         rot, entry + alpha * (trans.reward + gamma * V - entry)
-            #     )
-            #     encountered_symmetry = True
-            self.Q[tuple(rot)] += alpha * (
-                trans.reward + gamma * V - self.Q[tuple(rot)]
-            )
+            # get all symmetries
+            origin_vec = np.concatenate((trans.state, [action_index]))
+            encountered_symmetry = False
+            for rot in get_all_rotations(origin_vec):
+                # if self.Q.already_exists(rot):
+                #     entry = self.Q.get_entry(rot)
+                #     self.Q.change_value(
+                #         rot, entry + alpha * (trans.reward + gamma * V - entry)
+                #     )
+                #     encountered_symmetry = True
+                self.Q[tuple(rot)] += alpha * (
+                    trans.reward + gamma * V - self.Q[tuple(rot)]
+                )
 
         # if not encountered_symmetry:
         #     self.Q.add_entry(rot, alpha * (trans.reward + gamma * V))
-
+    # print(f"counter {counter}")
     # Store the model
     with open(r"model.pt", "wb") as file:
         pickle.dump(self.Q, file)
@@ -192,7 +195,7 @@ def reward_from_events(self, events: List[str]) -> int:
     certain behavior.
     """
     game_rewards = {
-        e.COIN_COLLECTED: 1,
+        e.COIN_COLLECTED: 2,
         # e.KILLED_OPPONENT: 5,
         e.INVALID_ACTION: -1,
         e.WAITED: -0.2,
