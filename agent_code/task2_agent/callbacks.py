@@ -1,7 +1,7 @@
 import os
 import pickle
 import random
-
+import time
 import numpy as np
 
 
@@ -42,7 +42,9 @@ def act(self, game_state: dict) -> str:
     """
 
     feat = state_to_features(game_state)
-    self.logger.debug("Querying model for action with feature " + str(tuple(feat)))
+    self.logger.debug(
+        "Querying model for action with feature " + str(tuple(feat)) + "."
+    )
     # TODO: Exploration vs exploitation
 
     # epsilon greedy
@@ -51,6 +53,7 @@ def act(self, game_state: dict) -> str:
         self.logger.debug("Epsilon-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
 
+    start = time.time()
     # get all symmetries
     Qs = []
     for act in range(len(ACTIONS)):
@@ -61,11 +64,11 @@ def act(self, game_state: dict) -> str:
                 # encountered_symmetry = True
                 Qs.append(self.Q.get_entry(rot))
                 break
-        else:
+        else:  # if not encountered symmetry
             Qs.append(0)
-        # if not encountered_symmetry:
 
     action_index = np.random.choice(np.flatnonzero(Qs == np.max(Qs)))
+    self.logger.debug("Choosing an action took " + (time.time() - start) + "ms.")
 
     # soft-max
 

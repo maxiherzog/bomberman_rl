@@ -20,8 +20,11 @@ def average_every(x, w):
     return arr
 
 
-BATCHES = 1  # 50
+BATCHES = 100  # 50
 
+with open("model.pt", "rb") as file:
+    Q = pickle.load(file)
+    print("Total entries:", len(Q.get_all()))
 
 with open("analysis/rewards.pt", "rb") as file:
     rewards = pickle.load(file)
@@ -31,9 +34,17 @@ with open("analysis/rewards.pt", "rb") as file:
     else:
         plt.plot(rewards)
     plt.xlabel("episode")
-    plt.ylabel("reward moving average")
+    plt.ylabel("reward averaged (batch size=" + str(BATCHES) + ")")
     plt.title("rewards")
-    plt.savefig("analysis/rewards.pdf")
+    plt.savefig("analysis/rewards_averaged.pdf")
+    plt.show()
+
+    # plot without averaging
+    plt.plot(rewards)
+    plt.xlabel("episode")
+    plt.ylabel("reward")
+    plt.title("rewards")
+    plt.savefig("analysis/rewards_averaged.pdf")
     plt.show()
 
 
