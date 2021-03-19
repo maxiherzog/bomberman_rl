@@ -49,13 +49,13 @@ with open("analysis/rewards.pt", "rb") as file:
 
 
 try:
-    with open("analysis/Q-dists.pt", "rb") as file:
-        Qdists = pickle.load(file)
-        plt.plot(Qdists)
+    with open("analysis/beta-dists.pt", "rb") as file:
+        betadists = pickle.load(file)
+        plt.plot(betadists)
         plt.xlabel("episode")
-        plt.ylabel("distance to original Q")
-        plt.title("Q dist")
-        plt.savefig("analysis/Qdist.pdf")
+        plt.ylabel(r"distance to original $\beta$")
+        plt.title(r"$\beta$ dist")
+        plt.savefig("analysis/betadist.pdf")
         plt.show()
 
 except:

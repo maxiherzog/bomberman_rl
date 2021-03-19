@@ -24,7 +24,7 @@ def setup(self):
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    if self.train or not os.path.isfile("model.pt"):
+    if not os.path.isfile("model.pt"):
         self.logger.info("Setting up model from scratch.")
 
     else:

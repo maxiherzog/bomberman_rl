@@ -24,6 +24,8 @@ ALPHA = 0.1
 GAMMA = 0.9
 XP_BUFFER_SIZE = 10
 
+STORE_FREQ = XP_BUFFER_SIZE * 4
+
 # Events
 EVADED_BOMB = "EVADED_BOMB"
 
@@ -123,29 +125,29 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         )
     )
 
-    self.rounds_played += 1
-    if self.rounds_played >= XP_BUFFER_SIZE:
-        updateQ(self)
-        # clear transitions -> ready for next game
-        self.transitions = deque(maxlen=None)
-        self.rounds_played = 0
-
     tot_reward = 0
     for trans in self.transitions:
         if trans.action != None:
             tot_reward += trans.reward
     self.tot_rewards.append(tot_reward)
 
-    # Store the model
-    with open(r"model.pt", "wb") as file:
-        pickle.dump(self.beta, file)
 
+    self.rounds_played += 1
+    if self.rounds_played % XP_BUFFER_SIZE == 0:
+        updateQ(self)
+        # clear transitions -> ready for next game
+        self.transitions = deque(maxlen=None)
 
-    with open("analysis/rewards.pt", "wb") as file:
-        pickle.dump(self.tot_rewards, file)
-    self.beta_dists.append(np.sum(self.beta))
-    with open("analysis/beta-dists.pt", "wb") as file:
-        pickle.dump(self.beta_dists, file)
+    if self.rounds_played % STORE_FREQ == 0:
+        # Store the model
+        with open(r"model.pt", "wb") as file:
+            pickle.dump(self.beta, file)
+
+        with open("analysis/rewards.pt", "wb") as file:
+            pickle.dump(self.tot_rewards, file)
+        self.beta_dists.append(np.sum(self.beta))
+        with open("analysis/beta-dists.pt", "wb") as file:
+            pickle.dump(self.beta_dists, file)
 
 
 def updateQ(self):
@@ -154,27 +156,16 @@ def updateQ(self):
         if t.state is not None:
             batch.append(t)  # TODO: prioritize interesting transitions
 
-    Ys = np.zeros(shape=(len(batch)))
-
-    Xs = np.zeros(shape=(len(batch), 8))
 
     for i, t in enumerate(batch):
         # calculate target response Y using TD # TODO: n-step TD
         if t.next_state is not None:
-            Ys[i] = t.reward + GAMMA * np.max(Q(self, t.next_state))
+            Y = t.reward + GAMMA * np.max(Q(self, t.next_state))
         else:
-            Ys[i] = t.reward
-        # enable vectorization for features
-        Xs[i, :] = t.state
+            Y = t.reward
+        # optimize Q towards Y
+        self.beta[:, ACTIONS.index(t.action)] += ALPHA/len(batch) * t.state * (Y - t.state.T @ self.beta[:, ACTIONS.index(t.action)])
 
-    # optimize Q towards Y
-    A = np.tile(Ys, (6,1)).T - Xs @ self.beta
-    B = np.tile(Xs, (6,1,1))
-
-    self.beta += ALPHA/len(batch) * np.sum(B.T * (A), axis=1)
-
-
-    np.tile
 
 def reward_from_events(self, events: List[str]) -> int:
     """
