@@ -126,6 +126,33 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         )
     )
 
+    updateQ(self)
+
+    # Store the model
+    with open(r"model.pt", "wb") as file:
+        pickle.dump(self.Q, file)
+
+    # measure
+    # Qc = np.zeros(self.Q.shape)
+    # Qc[0, :, :14] = 1 # OBEN
+    # Qc[0, :, :14,  0, :] = 0
+    # Qc[2, :, -14:] = 1 # UNTEN
+    # Qc[2, :, -14:, 0, :] = 0
+    # Qc[3, :14, :] = 1 # LINKS
+    # Qc[3, :14,  :, :, 0] = 0
+    # Qc[1, -14:, :] = 1 # RECHTS
+    # Qc[1, -14:, :, :, 0] = 0
+
+    with open("analysis/rewards.pt", "wb") as file:
+        pickle.dump(self.tot_rewards, file)
+    self.Q_dists.append(np.sum(self.Q))
+    with open("analysis/Q-dists.pt", "wb") as file:
+        pickle.dump(self.Q_dists, file)
+
+    # clear transitions -> ready for next game
+    self.transitions = deque(maxlen=None)
+
+def updateQ(self):
     tot_reward = 0
     counter = 0
     for trans in self.transitions:
@@ -155,37 +182,13 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                 #     )
                 #     encountered_symmetry = True
                 self.Q[tuple(rot)] += alpha * (
-                    trans.reward + gamma * V - self.Q[tuple(rot)]
+                        trans.reward + gamma * V - self.Q[tuple(rot)]
                 )
-
         # if not encountered_symmetry:
         #     self.Q.add_entry(rot, alpha * (trans.reward + gamma * V))
     # print(f"counter {counter}")
-    # Store the model
-    with open(r"model.pt", "wb") as file:
-        pickle.dump(self.Q, file)
-
-    # measure
-    # Qc = np.zeros(self.Q.shape)
-    # Qc[0, :, :14] = 1 # OBEN
-    # Qc[0, :, :14,  0, :] = 0
-    # Qc[2, :, -14:] = 1 # UNTEN
-    # Qc[2, :, -14:, 0, :] = 0
-    # Qc[3, :14, :] = 1 # LINKS
-    # Qc[3, :14,  :, :, 0] = 0
-    # Qc[1, -14:, :] = 1 # RECHTS
-    # Qc[1, -14:, :, :, 0] = 0
 
     self.tot_rewards.append(tot_reward)
-    with open("analysis/rewards.pt", "wb") as file:
-        pickle.dump(self.tot_rewards, file)
-    self.Q_dists.append(np.sum(self.Q))
-    with open("analysis/Q-dists.pt", "wb") as file:
-        pickle.dump(self.Q_dists, file)
-
-    # clear transitions -> ready for next game
-    self.transitions = deque(maxlen=None)
-
 
 def reward_from_events(self, events: List[str]) -> int:
     """
