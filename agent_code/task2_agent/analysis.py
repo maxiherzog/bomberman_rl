@@ -22,9 +22,9 @@ def average_every(x, w):
 
 BATCHES = 100  # 50
 
-with open("model.pt", "rb") as file:
-    Q = pickle.load(file)
-    print("Total entries:", len(Q.get_all()))
+# with open(r"model.pt", "rb") as file:
+#     Q = pickle.load(file)
+#     print("Total entries:", len(Q.get_all()))
 
 with open("analysis/rewards.pt", "rb") as file:
     rewards = pickle.load(file)
@@ -58,14 +58,5 @@ try:
         plt.savefig("analysis/Qdist.pdf")
         plt.show()
 
-        # Q = np.zeros((5, 14 * 2 + 1, 14 * 2 + 1, 2, 2))
-        # Q[0, :, :14] = 1 # OBEN
-        # Q[0, :, :14,  0, :] = 0
-        # Q[2, :, -14:] = 1 # UNTEN
-        # Q[2, :, -14:, 0, :] = 0
-        # Q[3, :14, :] = 1 # LINKS
-        # Q[3, :14,  :, :, 0] = 0
-        # Q[1, -14:, :] = 1 # RECHTS
-        # Q[1, -14:, :, :, 0] = 0
 except:
     pass

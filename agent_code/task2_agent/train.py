@@ -19,8 +19,8 @@ import time
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
 
 # Hyper parameters -- DO modify
-TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
-RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
+# TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
+# RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
 # Events
 EVADED_BOMB = "EVADED_BOMB"
@@ -36,7 +36,7 @@ def setup_training(self):
     """
     # Example: Setup an array that will note transition tuples
     # (s, a, r, s')
-    self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
+    self.transitions = deque(maxlen=None)  #
 
     if os.path.isfile("model.pt"):
         self.logger.info("Retraining from saved state.")
@@ -44,7 +44,13 @@ def setup_training(self):
             self.Q = pickle.load(file)
     else:
         self.logger.debug(f"Initializing Q")
-        self.Q = SparseTensor([14 * 2 + 1, 14 * 2 + 1, 4, 3, 3, 3, 3, len(ACTIONS)])
+        self.Q = np.zeros([2, 2, 2, 2, 3, 3, 3, 5, len(ACTIONS)])
+
+        self.Q[1, :, :, :, :, :, :, :, 2] = -1
+        self.Q[:, 1, :, :, :, :, :, :, 1] = -1
+        self.Q[:, :, 1, :, :, :, :, :, 0] = -1
+        self.Q[:, :, :, 1, :, :, :, :, 3] = -1
+        # self.Q = SparseTensor([2, 2, 3, 3, 3, 5, len(ACTIONS)])
         # self.Q = SparseTensor([14 * 2 + 1, 14 * 2 + 1, 4, 3, 3, 3, 3, 3, 3, 3, 3, len(ACTIONS)])
 
     # measuring
@@ -128,7 +134,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             V = 0
         else:
             V = np.max(
-                self.Q.get_last_splice(trans.next_state)
+                # self.Q.get_last_splice(trans.next_state)
+                self.Q[tuple(trans.next_state)]
             )  # TODO: SARSA vs Q-Learning V
         alpha = 0.2
         gamma = 0.9
@@ -138,15 +145,18 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         origin_vec = np.concatenate((trans.state, [action_index]))
         encountered_symmetry = False
         for rot in get_all_rotations(origin_vec):
-            if self.Q.already_exists(rot):
-                entry = self.Q.get_entry(rot)
-                self.Q.change_value(
-                    rot, entry + alpha * (trans.reward + gamma * V - entry)
-                )
-                encountered_symmetry = True
+            # if self.Q.already_exists(rot):
+            #     entry = self.Q.get_entry(rot)
+            #     self.Q.change_value(
+            #         rot, entry + alpha * (trans.reward + gamma * V - entry)
+            #     )
+            #     encountered_symmetry = True
+            self.Q[tuple(rot)] += alpha * (
+                trans.reward + gamma * V - self.Q[tuple(rot)]
+            )
 
-        if not encountered_symmetry:
-            self.Q.add_entry(rot, alpha * (trans.reward + gamma * V))
+        # if not encountered_symmetry:
+        #     self.Q.add_entry(rot, alpha * (trans.reward + gamma * V))
 
     # Store the model
     with open(r"model.pt", "wb") as file:
@@ -166,9 +176,12 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.tot_rewards.append(tot_reward)
     with open("analysis/rewards.pt", "wb") as file:
         pickle.dump(self.tot_rewards, file)
-    self.Q_dists.append(np.sum(self.Q.get_all()))
+    self.Q_dists.append(np.sum(self.Q))
     with open("analysis/Q-dists.pt", "wb") as file:
         pickle.dump(self.Q_dists, file)
+
+    # clear transitions -> ready for next game
+    self.transitions = deque(maxlen=None)
 
 
 def reward_from_events(self, events: List[str]) -> int:
