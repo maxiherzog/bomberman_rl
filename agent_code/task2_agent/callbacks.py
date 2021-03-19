@@ -46,7 +46,7 @@ def act(self, game_state: dict) -> str:
     # TODO: Exploration vs exploitation
 
     # epsilon greedy
-    epsilon = 0.05
+    epsilon = 0.2
     if self.train and random.random() < epsilon:
         self.logger.debug("Epsilon-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
