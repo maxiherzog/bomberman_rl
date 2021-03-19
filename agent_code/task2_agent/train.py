@@ -6,14 +6,13 @@ import os
 import scipy.sparse as sp
 
 import events as e
-from .callbacks import state_to_features
+from .callbacks import state_to_features, Q
 from .callbacks import ACTIONS
 from .callbacks import get_all_rotations
 import numpy as np
 from .sparseTensor import SparseTensor
 
 import time
-
 
 # This is only an example!
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
@@ -45,29 +44,22 @@ def setup_training(self):
     if os.path.isfile("model.pt"):
         self.logger.info("Retraining from saved state.")
         with open("model.pt", "rb") as file:
-            self.Q = pickle.load(file)
+            self.beta = pickle.load(file)
     else:
         self.logger.debug(f"Initializing Q")
-        self.Q = np.zeros([2, 2, 2, 2, 3, 3, 3, 5, len(ACTIONS)])
-
-        self.Q[1, :, :, :, :, :, :, :, 2] = -1
-        self.Q[:, 1, :, :, :, :, :, :, 1] = -1
-        self.Q[:, :, 1, :, :, :, :, :, 0] = -1
-        self.Q[:, :, :, 1, :, :, :, :, 3] = -1
-        # self.Q = SparseTensor([2, 2, 3, 3, 3, 5, len(ACTIONS)])
-        # self.Q = SparseTensor([14 * 2 + 1, 14 * 2 + 1, 4, 3, 3, 3, 3, 3, 3, 3, 3, len(ACTIONS)])
+        self.beta = np.zeros([8, len(ACTIONS)])
 
     # measuring
-    self.Q_dists = []
+    self.beta_dists = []
     self.tot_rewards = []
 
 
 def game_events_occurred(
-    self,
-    old_game_state: dict,
-    self_action: str,
-    new_game_state: dict,
-    events: List[str],
+        self,
+        old_game_state: dict,
+        self_action: str,
+        new_game_state: dict,
+        events: List[str],
 ):
     """
     Called once per step to allow intermediate rewards based on game events.
@@ -116,6 +108,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     This is *one* of the places where you could update your agent.
     This is also a good place to store an agent that you updated.
 
+    :type self: object
     :param self: The same object that is passed to all of your callbacks.
     """
     self.logger.debug(
@@ -136,67 +129,52 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         # clear transitions -> ready for next game
         self.transitions = deque(maxlen=None)
         self.rounds_played = 0
-    else:
-        tot_reward = 0
-        for trans in self.transitions:
-            if trans.action != None:
-                tot_reward += trans.reward
-        self.tot_rewards.append(tot_reward)
 
-    # Store the model
-    with open(r"model.pt", "wb") as file:
-        pickle.dump(self.Q, file)
-
-    # measure
-    # Qc = np.zeros(self.Q.shape)
-    # Qc[0, :, :14] = 1 # OBEN
-    # Qc[0, :, :14,  0, :] = 0
-    # Qc[2, :, -14:] = 1 # UNTEN
-    # Qc[2, :, -14:, 0, :] = 0
-    # Qc[3, :14, :] = 1 # LINKS
-    # Qc[3, :14,  :, :, 0] = 0
-    # Qc[1, -14:, :] = 1 # RECHTS
-    # Qc[1, -14:, :, :, 0] = 0
-
-    with open("analysis/rewards.pt", "wb") as file:
-        pickle.dump(self.tot_rewards, file)
-    self.Q_dists.append(np.sum(self.Q))
-    with open("analysis/Q-dists.pt", "wb") as file:
-        pickle.dump(self.Q_dists, file)
-
-
-def updateQ(self):
     tot_reward = 0
     for trans in self.transitions:
         if trans.action != None:
             tot_reward += trans.reward
-
-            if trans.next_state is None:
-                V = 0
-            else:
-                V = np.max(
-                    # self.Q.get_last_splice(trans.next_state)
-                    self.Q[tuple(trans.next_state)]
-                )  # TODO: SARSA vs Q-Learning V
-            action_index = ACTIONS.index(trans.action)
-
-            # get all symmetries
-            origin_vec = np.concatenate((trans.state, [action_index]))
-            encountered_symmetry = False
-            for rot in get_all_rotations(origin_vec):
-                # if self.Q.already_exists(rot):
-                #     entry = self.Q.get_entry(rot)
-                #     self.Q.change_value(
-                #         rot, entry + alpha * (trans.reward + gamma * V - entry)
-                #     )
-                #     encountered_symmetry = True
-                self.Q[tuple(rot)] += ALPHA * (
-                        trans.reward + GAMMA * V - self.Q[tuple(rot)]
-                )
-        # if not encountered_symmetry:
-        #     self.Q.add_entry(rot, alpha * (trans.reward + gamma * V))
-
     self.tot_rewards.append(tot_reward)
+
+    # Store the model
+    with open(r"model.pt", "wb") as file:
+        pickle.dump(self.beta, file)
+
+
+    with open("analysis/rewards.pt", "wb") as file:
+        pickle.dump(self.tot_rewards, file)
+    self.beta_dists.append(np.sum(self.beta))
+    with open("analysis/beta-dists.pt", "wb") as file:
+        pickle.dump(self.beta_dists, file)
+
+
+def updateQ(self):
+    batch = []
+    for t in self.transitions:
+        if t.state is not None:
+            batch.append(t)  # TODO: prioritize interesting transitions
+
+    Ys = np.zeros(shape=(len(batch)))
+
+    Xs = np.zeros(shape=(len(batch), 8))
+
+    for i, t in enumerate(batch):
+        # calculate target response Y using TD # TODO: n-step TD
+        if t.next_state is not None:
+            Ys[i] = t.reward + GAMMA * np.max(Q(self, t.next_state))
+        else:
+            Ys[i] = t.reward
+        # enable vectorization for features
+        Xs[i, :] = t.state
+
+    # optimize Q towards Y
+    A = np.tile(Ys, (6,1)).T - Xs @ self.beta
+    B = np.tile(Xs, (6,1,1))
+
+    self.beta += ALPHA/len(batch) * np.sum(B.T * (A), axis=1)
+
+
+    np.tile
 
 def reward_from_events(self, events: List[str]) -> int:
     """

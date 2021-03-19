@@ -30,7 +30,7 @@ def setup(self):
     else:
         self.logger.info("Loading model.")
         with open("model.pt", "rb") as file:
-            self.Q = pickle.load(file)
+            self.beta = pickle.load(file)
 
 
 def act(self, game_state: dict) -> str:
@@ -67,7 +67,7 @@ def act(self, game_state: dict) -> str:
     #             break
     #     else:  # if not encountered symmetry
     #         Qs.append(0)
-    Qs = self.Q[tuple(feat)]
+    Qs = Q(self, feat)
 
     action_index = np.random.choice(np.flatnonzero(Qs == np.max(Qs)))
     self.logger.debug("Choosing an action took " + str((time.time() - start)) + "ms.")
@@ -84,6 +84,8 @@ def act(self, game_state: dict) -> str:
     self.logger.debug("ACTION choosen: " + ACTIONS[action_index])
     return ACTIONS[action_index]
 
+def Q(self, X) -> np.array:
+    return X @ self.beta
 
 def state_to_features(game_state: dict) -> np.array:
     """
@@ -141,23 +143,12 @@ def state_to_features(game_state: dict) -> np.array:
     y_off = [1, 0, -1, 0]  # , 0, 0, 2, -2]
     blocked = np.zeros(len(x_off))
     for i in range(len(blocked)):
-        if (
-            game_state["self"][3][0] + x_off[i] > 16
-            or game_state["self"][3][0] + x_off[i] < 0
-        ):
-            blocked[i] = 0
-        elif (
-            game_state["self"][3][1] + y_off[i] > 16
-            or game_state["self"][3][1] + y_off[i] < 0
-        ):
-            blocked[i] = 0
-        else:
-            blocked[i] = np.abs(
-                game_state["field"][
-                    game_state["self"][3][0] + x_off[i],
-                    game_state["self"][3][1] + y_off[i],
-                ]
-            )
+        blocked[i] = np.abs(
+            game_state["field"][
+                game_state["self"][3][0] + x_off[i],
+                game_state["self"][3][1] + y_off[i],
+            ]
+        )
 
     # mod_pos = [game_state["self"][3][0] % 2, game_state["self"][3][1] % 2]
 
