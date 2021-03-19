@@ -7,6 +7,8 @@ from random import shuffle
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
 
+# Hyperparameter
+EPSILON = 0.1
 
 def setup(self):
     """
@@ -48,8 +50,7 @@ def act(self, game_state: dict) -> str:
     # TODO: Exploration vs exploitation
 
     # epsilon greedy
-    epsilon = 0.1
-    if self.train and random.random() < epsilon:
+    if self.train and random.random() < EPSILON:
         self.logger.debug("Epsilon-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
 
