@@ -145,7 +145,6 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         # Store analysis data
         with open("analysis/rewards.pt", "wb") as file:
             pickle.dump(self.tot_rewards, file)
-        self.beta_dists.append(np.sum(self.beta))
         with open("analysis/beta-dists.pt", "wb") as file:
             pickle.dump(self.beta_dists, file)
 
