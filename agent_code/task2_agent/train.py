@@ -1,37 +1,53 @@
 import pickle
 import random
 from collections import namedtuple, deque
-from typing import List, Any, Union
+from typing import List
 import os
 import scipy.sparse as sp
 
+import json
+
 import events as e
-from .callbacks import state_to_features, Q
+from .callbacks import state_to_features
 from .callbacks import ACTIONS
 from .callbacks import get_all_rotations
+from .callbacks import EPSILON
+from .callbacks import Q
 import numpy as np
 from .sparseTensor import SparseTensor
 
+
 import time
 
-# This is only an example!
+
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
-
-# Hyper parameters -- DO modify
-# TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
-# RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-ALPHA = 0.1
-GAMMA = 0.9
-XP_BUFFER_SIZE = 10
-N = 4 # steps for n step TD
-
-STORE_FREQ = XP_BUFFER_SIZE * 4
 
 # Events
 EVADED_BOMB = "EVADED_BOMB"
 NO_CRATE_DESTROYED = "NO_CRATE_DESTROYED"
 NO_BOMB = "NO_BOMB"
 
+
+# Hyper parameters -- DO modify
+# TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
+# RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
+ALPHA = 0.2
+GAMMA = 0.9
+N = 4           # for n-step TD Q learning
+GAME_REWARDS = {
+    e.COIN_COLLECTED: 2,
+    # e.KILLED_OPPONENT: 5,
+    e.INVALID_ACTION: -1,
+    e.CRATE_DESTROYED: 1,
+    e.KILLED_SELF: -2,
+    # e.BOMB_DROPPED: 0.5,
+    # EVADED_BOMB: 1,
+    NO_BOMB: -0.05,
+    NO_CRATE_DESTROYED: -0.5,
+}
+
+XP_BUFFER_SIZE = 10
+STORE_FREQ = 500
 
 def setup_training(self):
     """
@@ -46,25 +62,48 @@ def setup_training(self):
     self.transitions = deque(maxlen=None)  #
     self.rounds_played = 0
 
+    # ensure analysis subfolder
+    if not os.path.exists("analysis"):
+        os.makedirs("analysis")
+
     if os.path.isfile("model.pt"):
         self.logger.info("Retraining from saved state.")
         with open("model.pt", "rb") as file:
             self.beta = pickle.load(file)
+        self.logger.info("Reloading analysis variables.")
+        with open("analysis/beta-dists.pt", "rb") as file:
+            self.beta_dists = pickle.load(file)
+        with open("analysis/rewards.pt", "rb") as file:
+            self.tot_rewards = pickle.load(file)
+        with open("analysis/coins.pt", "rb") as file:
+            self.coins_collected = pickle.load(file)
+        with open("analysis/crates.pt", "rb") as file:
+            self.crates_destroyed = pickle.load(file)
     else:
         self.logger.debug(f"Initializing Q")
         self.beta = np.zeros([8, len(ACTIONS)])
 
-    # MEASUREING PARAMETERS
-    if not os.path.exists("analysis"):
-        os.makedirs("analysis")
-    self.beta_dists = []
-    self.tot_rewards = []
 
+        # init measured variables
+        self.beta_dists = []
+        self.tot_rewards = []
+        self.coins_collected = []
+        self.crates_destroyed = []
+
+        # dump hyper parameters as json
+        hyperparams = {
+            "ALPHA": ALPHA,
+            "GAMMA": GAMMA,
+            "EPSILON": EPSILON,
+            "GAME_REWARDS": GAME_REWARDS,
+        }
+        with open("analysis/hyperparams.json", "w") as file:
+            json.dump(hyperparams, file, ensure_ascii=False, indent=4)
+
+    # init counters
     # hands on variables
     self.crate_counter = 0
-    self.crates_destroyed = []
     self.coin_counter = 0
-    self.coins_collected = []
 
 def game_events_occurred(
         self,
@@ -109,7 +148,7 @@ def game_events_occurred(
         self.crate_counter += 1
 
     if e.COIN_COLLECTED in events:
-        self.crate_counter += 1
+        self.coin_counter += 1
 
     # state_to_features is defined in callbacks.py
     self.transitions.append(
@@ -153,8 +192,12 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             tot_reward += trans.reward
     self.tot_rewards.append(tot_reward)
     self.beta_dists.append(np.sum(self.beta))
+
     self.crates_destroyed.append(self.crate_counter)
     self.crate_counter = 0
+
+    self.coins_collected.append(self.coin_counter)
+    self.coin_counter = 0
 
     self.rounds_played += 1
     if self.rounds_played % XP_BUFFER_SIZE == 0:
@@ -162,20 +205,25 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         # clear transitions -> ready for next game
         self.transitions = deque(maxlen=None)
 
-    if self.rounds_played % STORE_FREQ == 0:
-        # Store the model
-        with open(r"model.pt", "wb") as file:
-            pickle.dump(self.beta, file)
-        # Store analysis data
-        with open("analysis/rewards.pt", "wb") as file:
-            pickle.dump(self.tot_rewards, file)
-        with open("analysis/beta-dists.pt", "wb") as file:
-            pickle.dump(self.beta_dists, file)
-        with open("analysis/crates.pt", "wb") as file:
-            pickle.dump(self.crates_destroyed, file)
-        with open("analysis/coins.pt", "wb") as file:
-            pickle.dump(self.coins_collected, file)
+    if last_game_state["round"] % STORE_FREQ == 0:
+        store(self)
 
+def store(self):
+    """
+    Stores all the files.
+    """
+    # Store the model
+    self.logger.debug("Storing model.")
+    with open(r"model.pt", "wb") as file:
+        pickle.dump(self.Q, file)
+    with open("analysis/rewards.pt", "wb") as file:
+        pickle.dump(self.tot_rewards, file)
+    with open("analysis/Q-dists.pt", "wb") as file:
+        pickle.dump(self.Q_dists, file)
+    with open("analysis/crates.pt", "wb") as file:
+        pickle.dump(self.crates_destroyed, file)
+    with open("analysis/coins.pt", "wb") as file:
+        pickle.dump(self.coins_collected, file)
 
 def updateQ(self):
     batch = []
@@ -206,29 +254,12 @@ def updateQ(self):
 
 def reward_from_events(self, events: List[str]) -> int:
     """
-    *This is not a required function, but an idea to structure your code.*
-
     Here you can modify the rewards your agent get so as to en/discourage
     certain behavior.
     """
-    game_rewards = {
-        e.COIN_COLLECTED : 1,
-        e.CRATE_DESTROYED : 0.05,
-        e.INVALID_ACTION : -0.1,
-        e.KILLED_SELF : -0.1
-        # e.COIN_COLLECTED: 3,
-        ## e.KILLED_OPPONENT: 5,
-        # e.INVALID_ACTION: -1,
-        # e.CRATE_DESTROYED: 2,
-        # e.KILLED_SELF: -1,
-        # e.BOMB_DROPPED: 0.3,
-        # EVADED_BOMB: 1,
-        # NO_BOMB: -0.05,
-        # NO_CRATE_DESTROYED: -1.4,
-    }
     reward_sum = 0
     for event in events:
-        if event in game_rewards:
-            reward_sum += game_rewards[event]
+        if event in GAME_REWARDS:
+            reward_sum += GAME_REWARDS[event]
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
