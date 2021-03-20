@@ -182,40 +182,65 @@ def state_to_features(game_state: dict) -> np.array:
 
         save = [0, 0, 0, 0]
         x, y = start
-        neighbors = [
-            (x, y)
-            for (x, y) in [
-                (x + x_off[0], y + y_off[0]),
-                (x + x_off[1], y + y_off[1]),
-                (x + x_off[2], y + y_off[2]),
-                (x + x_off[3], y + y_off[3]),
+
+        dist = game_state["bombs"][0][0] - np.array(start)
+
+        # if tile already save, show surrounding tiles as [0,0,0,0] (should WAIT)
+        if not (all(dist != 0) or np.sum(np.abs(dist)) > 3):
+            # print("current position not save!")
+            # else: search if tiles are save
+            neighbors = [
+                (x, y)
+                for (x, y) in [
+                    (x + x_off[0], y + y_off[0]),
+                    (x + x_off[1], y + y_off[1]),
+                    (x + x_off[2], y + y_off[2]),
+                    (x + x_off[3], y + y_off[3]),
+                ]
             ]
-        ]
 
-        for i, neighbor in enumerate(neighbors):
-            if free_space[neighbor]:
-                frontier = [neighbor]
-                parent_dict = {start: start, neighbor: neighbor}
-                while len(frontier) > 0:
-                    current = frontier.pop(0)
-                    x, y = current
-                    available_neighbors = [
-                        (x, y)
-                        for (x, y) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
-                        if free_space[x, y]
-                    ]
-
-                    for neineighbor in available_neighbors:
-                        if neineighbor not in parent_dict:
-                            frontier.append(neineighbor)
-                            parent_dict[neineighbor] = neighbor
-                            dist = game_state["bombs"][0][0] - np.array(neineighbor)
-                            if all(dist != 0) or np.sum(np.abs(dist)) > 3:
-                                save[i] = 1
-                                break
-                    else:
+            for i, neighbor in enumerate(neighbors):
+                if free_space[neighbor]:
+                    # print("checking..", neighbor)
+                    dist = game_state["bombs"][0][0] - np.array(start)
+                    if all(dist != 0) or np.sum(np.abs(dist)) > 3:
+                        # print("neighbor is save!", neighbor)
+                        save[i] = 1
                         continue
-                    break
+                    frontier = [neighbor]
+                    parent_dict = {start: start, neighbor: neighbor}
+                    dist_so_far = {neighbor: 1}
+                    while len(frontier) > 0:
+                        current = frontier.pop(0)
+                        if dist_so_far[current] > game_state["bombs"][0][1]:
+                            # print("too far: stopping here", current)
+                            continue
+                        x, y = current
+                        available_neighbors = [
+                            (x, y)
+                            for (x, y) in [
+                                (x + 1, y),
+                                (x - 1, y),
+                                (x, y + 1),
+                                (x, y - 1),
+                            ]
+                            if free_space[x, y]
+                        ]
+
+                        for neineighbor in available_neighbors:
+                            if neineighbor not in parent_dict:
+                                frontier.append(neineighbor)
+                                parent_dict[neineighbor] = neighbor
+                                dist = game_state["bombs"][0][0] - np.array(neineighbor)
+                                dist_so_far[neineighbor] = dist_so_far[current] + 1
+                                if all(dist != 0) or np.sum(np.abs(dist)) > 3:
+                                    save[i] = 1
+                                    # print("found save spot at ", neineighbor)
+                                    break
+                        else:
+                            continue
+                        break
+        # print(save)
     else:
         # for crates, coins: BFS
 
@@ -302,17 +327,16 @@ def rotate(index_vector):
     """
     Rotates the state vector 90 degrees clockwise.
     """
-    # 11
     if index_vector[-1] <= 3:  # DIRECTIONAL ACTION -> add 1
         action_index = (index_vector[-1] + 1) % 4
     else:
         action_index = index_vector[-1]  # BOMB and WAIT invariant
 
     return (
-        index_vector[1],  # save tiles
-        index_vector[2],
-        index_vector[3],
+        index_vector[3],  # save tiles
         index_vector[0],
+        index_vector[1],
+        index_vector[2],
         -index_vector[5] + 2,  # POI vector y->-x
         index_vector[4],  # x->y
         index_vector[6],  # POI type invariant
