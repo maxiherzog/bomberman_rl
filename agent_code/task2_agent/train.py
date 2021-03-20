@@ -130,7 +130,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         if trans.action != None:
             tot_reward += trans.reward
     self.tot_rewards.append(tot_reward)
-
+    self.beta_dists.append(np.sum(self.beta))
 
     self.rounds_played += 1
     if self.rounds_played % XP_BUFFER_SIZE == 0:
@@ -142,7 +142,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         # Store the model
         with open(r"model.pt", "wb") as file:
             pickle.dump(self.beta, file)
-
+        # Store analysis data
         with open("analysis/rewards.pt", "wb") as file:
             pickle.dump(self.tot_rewards, file)
         self.beta_dists.append(np.sum(self.beta))
