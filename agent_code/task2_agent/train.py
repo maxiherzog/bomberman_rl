@@ -204,11 +204,9 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             origin_vec = np.concatenate((trans.state, [action_index]))
             # encountered_symmetry = False
             for rot in get_all_rotations(origin_vec):
-                print(rot)
                 self.Q[tuple(rot)] += ALPHA * (
                     trans.reward + GAMMA * V - self.Q[tuple(origin_vec)]
                 )
-            print("-----------")
 
     self.tot_rewards.append(tot_reward)
     self.Q_dists.append(np.sum(self.Q))
