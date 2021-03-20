@@ -1,7 +1,7 @@
 import pickle
 import random
 from collections import namedtuple, deque
-from typing import List
+from typing import List, Any, Union
 import os
 import scipy.sparse as sp
 
@@ -23,6 +23,7 @@ Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"
 ALPHA = 0.1
 GAMMA = 0.9
 XP_BUFFER_SIZE = 10
+N = 4 # steps for n step TD
 
 STORE_FREQ = XP_BUFFER_SIZE * 4
 
@@ -178,23 +179,29 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
 def updateQ(self):
     batch = []
+    occasion = []               # storing transitions in occasions to reflect their context
     for t in self.transitions:
         if t.state is not None:
-            batch.append(t)  # TODO: prioritize interesting transitions
+            occasion.append(t)  # TODO: prioritize interesting transitions
+        else:
+            batch.append(occasion)
+            occasion = []
 
-
-    for i,t in enumerate(batch):
-        all_feat_action = get_all_rotations(np.concatenate([batch[i].state, [ACTIONS.index(batch[i].action)]]))
-        for j in range(len(all_feat_action)):
-            # calculate target response Y using TD # TODO: n-step TD
-            if t.next_state is not None:
-                Y = t.reward + GAMMA * np.max(Q(self, t.next_state))
-            else:
-                Y = t.reward
-            # optimize Q towards Y
-            state = np.array(all_feat_action[j][:-1])
-            action = all_feat_action[j][-1]
-            self.beta[:, action] += ALPHA/len(batch) * state * (Y - state.T @ self.beta[:, action])
+    for occ in batch:
+        for i,t in enumerate(occ):
+            all_feat_action = get_all_rotations(np.concatenate([occ[i].state, [ACTIONS.index(occ[i].action)]]))
+            for j in range(len(all_feat_action)):
+                # calculate target response Y using n step TD!
+                n = min(len(occ)-i, N)      # calculate next N steps, otherwise just as far as possible
+                r = [GAMMA**k * occ[i+k].reward for k in range(n)]
+                if t.next_state is not None:
+                    Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
+                else:
+                    Y = t.reward
+                # optimize Q towards Y
+                state = np.array(all_feat_action[j][:-1])
+                action = all_feat_action[j][-1]
+                self.beta[:, action] += ALPHA/len(self.transitions) * state * (Y - state.T @ self.beta[:, action])       # TODO: think about batch size division
 
 
 def reward_from_events(self, events: List[str]) -> int:
@@ -205,15 +212,19 @@ def reward_from_events(self, events: List[str]) -> int:
     certain behavior.
     """
     game_rewards = {
-        e.COIN_COLLECTED: 3,
-        # e.KILLED_OPPONENT: 5,
-        e.INVALID_ACTION: -1,
-        e.CRATE_DESTROYED: 2,
-        e.KILLED_SELF: -1,
-        e.BOMB_DROPPED: 0.3,
-        EVADED_BOMB: 1,
-        NO_BOMB: -0.05,
-        NO_CRATE_DESTROYED: -1.4,
+        e.COIN_COLLECTED : 1,
+        e.CRATE_DESTROYED : 0.05,
+        e.INVALID_ACTION : -0.1,
+        e.KILLED_SELF : -0.1
+        # e.COIN_COLLECTED: 3,
+        ## e.KILLED_OPPONENT: 5,
+        # e.INVALID_ACTION: -1,
+        # e.CRATE_DESTROYED: 2,
+        # e.KILLED_SELF: -1,
+        # e.BOMB_DROPPED: 0.3,
+        # EVADED_BOMB: 1,
+        # NO_BOMB: -0.05,
+        # NO_CRATE_DESTROYED: -1.4,
     }
     reward_sum = 0
     for event in events:
