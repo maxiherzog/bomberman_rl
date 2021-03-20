@@ -314,12 +314,18 @@ def state_to_features(game_state: dict) -> np.array:
 
 
 def get_all_rotations(index_vector):
-    rots = [tuple(index_vector), flip(index_vector)]
+    rots = [tuple(index_vector)]
+    flipped_vector = flip(index_vector)  # check if already symmetric
+    if flipped_vector not in rots:
+        rots.append(flipped_vector)
+
     for i in range(0, 3):
         index_vector = rotate(index_vector)
-        rots.append(index_vector)
+        if index_vector not in rots:
+            rots.append(index_vector)
         flipped_vector = flip(index_vector)
-        rots.append(flipped_vector)
+        if flipped_vector not in rots:
+            rots.append(flipped_vector)
     return rots
 
 
