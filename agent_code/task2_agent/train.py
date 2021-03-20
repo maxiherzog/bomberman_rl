@@ -48,9 +48,9 @@ def setup_training(self):
         self.logger.debug(f"Initializing Q")
         self.Q = np.zeros([2, 2, 2, 2, 3, 3, 3, 5, len(ACTIONS)])
 
-        self.Q[0, :, :, :, :, :, :, :, 2] = -1
+        self.Q[0, :, :, :, :, :, :, :, 0] = -1
         self.Q[:, 0, :, :, :, :, :, :, 1] = -1
-        self.Q[:, :, 0, :, :, :, :, :, 0] = -1
+        self.Q[:, :, 0, :, :, :, :, :, 2] = -1
         self.Q[:, :, :, 0, :, :, :, :, 3] = -1
 
     # MEASUREING PARAMETERS
@@ -159,8 +159,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                 V = np.max(
                     self.Q[tuple(trans.next_state)]
                 )  # TODO: SARSA vs Q-Learning V
-            alpha = 0.5
-            gamma = 0.9
+            alpha = 0.1
+            gamma = 0.94
             action_index = ACTIONS.index(trans.action)
 
             # get all symmetries
@@ -168,7 +168,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             # encountered_symmetry = False
             for rot in get_all_rotations(origin_vec):
                 self.Q[tuple(rot)] += alpha * (
-                    trans.reward + gamma * V - self.Q[tuple(rot)]
+                    trans.reward + gamma * V - self.Q[tuple(origin_vec)]
                 )
 
     # Store the model
@@ -206,13 +206,12 @@ def reward_from_events(self, events: List[str]) -> int:
         e.COIN_COLLECTED: 3,
         # e.KILLED_OPPONENT: 5,
         e.INVALID_ACTION: -1,
-        # e.WAITED: -0.2,
         e.CRATE_DESTROYED: 2,
         e.KILLED_SELF: -1,
         e.BOMB_DROPPED: 0.3,
         EVADED_BOMB: 1,
-        NO_BOMB: -0.1,
-        NO_CRATE_DESTROYED: -1.3,
+        NO_BOMB: -0.05,
+        NO_CRATE_DESTROYED: -1.4,
     }
     reward_sum = 0
     for event in events:

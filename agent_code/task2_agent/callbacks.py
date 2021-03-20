@@ -48,7 +48,7 @@ def act(self, game_state: dict) -> str:
     # TODO: Exploration vs exploitation
 
     # epsilon greedy
-    epsilon = 0.2
+    epsilon = 0.1
     if self.train and random.random() < epsilon:
         self.logger.debug("Epsilon-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
@@ -160,6 +160,11 @@ def state_to_features(game_state: dict) -> np.array:
 
     # mod_pos = [game_state["self"][3][0] % 2, game_state["self"][3][1] % 2]
 
+    x_off = [0, 1, 0, -1]
+    y_off = [-1, 0, 1, 0]
+
+    # part for computing POI and save
+
     # for bombs:
     if game_state["bombs"] != []:
         # TODO: schlechter fix for now, immer nur eine Bombe(die eigene) in Task 2
@@ -178,7 +183,13 @@ def state_to_features(game_state: dict) -> np.array:
         # LIKE x_off, y_off
         x, y = start
         neighbors = [
-            (x, y) for (x, y) in [(x, y + 1), (x + 1, y), (x, y - 1), (x - 1, y)]
+            (x, y)
+            for (x, y) in [
+                (x + x_off[0], y + y_off[0]),
+                (x + x_off[1], y + y_off[1]),
+                (x + x_off[2], y + y_off[2]),
+                (x + x_off[3], y + y_off[3]),
+            ]
         ]
 
         for i, neighbor in enumerate(neighbors):
@@ -255,8 +266,6 @@ def state_to_features(game_state: dict) -> np.array:
         # print(f"Suitable target found at {POI_position}, {POI_type}")
 
         # ALSO compute save directions
-        x_off = [0, 1, 0, -1]
-        y_off = [1, 0, -1, 0]
         save = np.zeros(len(x_off))
         for i in range(len(save)):
             save[i] = (
@@ -286,8 +295,8 @@ def get_all_rotations(index_vector):
     for i in range(0, 3):
         index_vector = rotate(index_vector)
         rots.append(index_vector)
-        index_vector = flip(index_vector)
-        rots.append(index_vector)
+        flipped_vector = flip(index_vector)
+        rots.append(flipped_vector)
     return rots
 
 
@@ -296,20 +305,20 @@ def rotate(index_vector):
     Rotates the state vector 90 degrees clockwise.
     """
     # 11
-    if index_vector[8] <= 3:  # DIRECTIONAL ACTION -> add 1
-        action_index = (index_vector[8] + 1) % 4
+    if index_vector[-1] <= 3:  # DIRECTIONAL ACTION -> add 1
+        action_index = (index_vector[-1] + 1) % 4
     else:
-        action_index = index_vector[8]  # BOMB and WAIT invariant
+        action_index = index_vector[-1]  # BOMB and WAIT invariant
 
     return (
         index_vector[1],  # save tiles
         index_vector[2],
         index_vector[3],
         index_vector[0],
-        -index_vector[2 + 3] + 2,  # POI vector y->-x
-        index_vector[2 + 2],  # x->y
-        index_vector[2 + 4],  # POI type invariant
-        index_vector[2 + 5],  # POI distance invariant
+        -index_vector[5] + 2,  # POI vector y->-x
+        index_vector[4],  # x->y
+        index_vector[6],  # POI type invariant
+        index_vector[7],  # POI distance invariant
         # # index_vector[6 + 3],  # surrounding
         # # index_vector[7 + 3],
         # # index_vector[0 + 3],
@@ -331,22 +340,22 @@ def flip(index_vector):
     Flips the state vector left to right.
     """
 
-    if index_vector[8] == 1:  # DIRECTIONAL ACTION -> add 1
+    if index_vector[-1] == 1:  # LEFT RIGHT-> switch
         action_index = 3
-    elif index_vector[8] == 3:
+    elif index_vector[-1] == 3:
         action_index = 1
     else:
-        action_index = index_vector[8]  # UP, DOWN, BOMB and WAIT invariant
+        action_index = index_vector[-1]  # UP, DOWN, BOMB and WAIT invariant
 
     return (
         index_vector[0],  # save tiles
         index_vector[3],
         index_vector[2],
         index_vector[1],
-        -index_vector[2 + 2] + 2,  # POI vector x->-x
-        index_vector[2 + 3],  # y->y
-        index_vector[2 + 4],  # POI type invariant
-        index_vector[2 + 5],  # POI distance invariant
+        -index_vector[4] + 2,  # POI vector x->-x
+        index_vector[5],  # y->y
+        index_vector[6],  # POI type invariant
+        index_vector[7],  # POI distance invariant
         # -index_vector[0] + 28,  # bomb position x->-x
         # index_vector[1],  # y->y
         # index_vector[2],  # bomb ticker invariant
