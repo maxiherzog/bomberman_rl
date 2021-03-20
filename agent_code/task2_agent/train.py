@@ -49,13 +49,14 @@ def setup_training(self):
         with open("model.pt", "rb") as file:
             self.Q = pickle.load(file)
 
-        with open("analysis/Qdist.pt", "rb") as file:
+        self.logger.info("Reloading analysis variables.")
+        with open("analysis/Q-dists.pt", "rb") as file:
             self.Q_dists = pickle.load(file)
-        with open("analysis/tot_rewards.pt", "rb") as file:
+        with open("analysis/rewards.pt", "rb") as file:
             self.tot_rewards = pickle.load(file)
-        with open("analysis/coins_collected.pt", "rb") as file:
+        with open("analysis/coins.pt", "rb") as file:
             self.coins_collected = pickle.load(file)
-        with open("analysis/crates_destroyed.pt", "rb") as file:
+        with open("analysis/crates.pt", "rb") as file:
             self.crates_destroyed = pickle.load(file)
     else:
         self.logger.debug(f"Initializing Q")
