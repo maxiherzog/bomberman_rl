@@ -183,18 +183,17 @@ def updateQ(self):
             batch.append(t)  # TODO: prioritize interesting transitions
 
 
-    for i, t in enumerate(batch):
-
-        all_feat_action = get_all_rotations(np.concatenate([t.state, [ACTIONS.index(t.action)]]))
-        for i in range(len(all_feat_action)):
+    for i in range(len(batch)):
+        all_feat_action = get_all_rotations(np.concatenate([batch[i].state, [ACTIONS.index(batch[i].action)]]))
+        for j in range(len(all_feat_action)):
             # calculate target response Y using TD # TODO: n-step TD
             if t.next_state is not None:
                 Y = t.reward + GAMMA * np.max(Q(self, t.next_state))
             else:
                 Y = t.reward
             # optimize Q towards Y
-            state = np.array(all_feat_action[i][:-1])
-            action = all_feat_action[i][-1]
+            state = np.array(all_feat_action[j][:-1])
+            action = all_feat_action[j][-1]
             self.beta[:, action] += ALPHA/len(batch) * state * (Y - state.T @ self.beta[:, action])
 
 
