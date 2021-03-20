@@ -175,7 +175,7 @@ def state_to_features(game_state: dict) -> np.array:
         POI_type = 0
 
         free_space = game_state["field"] == 0
-        free_space[game_state["bombs"][0][0]] = False
+        free_space[tuple(game_state["bombs"][0][0])] = False
 
         start = game_state["self"][3]
 
@@ -200,11 +200,13 @@ def state_to_features(game_state: dict) -> np.array:
                     current = frontier.pop(0)
 
                     x, y = current
+                    # print(x, y)
                     available_neighbors = [
                         (x, y)
                         for (x, y) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
                         if free_space[x, y]
                     ]
+                    # print(available_neighbors)
                     for neineighbor in available_neighbors:
                         if neineighbor not in parent_dict:
                             frontier.append(neineighbor)

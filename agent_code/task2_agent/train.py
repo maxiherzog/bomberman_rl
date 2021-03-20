@@ -103,7 +103,7 @@ def game_events_occurred(
     if e.BOMB_EXPLODED in events and not e.CRATE_DESTROYED in events:
         events.append(NO_CRATE_DESTROYED)
 
-    if not e.BOMB_EXPLODED in events:
+    if not e.BOMB_DROPPED in events:
         events.append(NO_BOMB)
 
     if e.CRATE_DESTROYED in events:
