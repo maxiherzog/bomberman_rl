@@ -6,7 +6,7 @@ import numpy as np
 from random import shuffle
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-EPSILON = 0.1
+EPSILON = 0.2
 
 
 def setup(self):
@@ -314,7 +314,7 @@ def state_to_features(game_state: dict) -> np.array:
 
 
 def get_all_rotations(index_vector):
-    rots = [index_vector, flip(index_vector)]
+    rots = [tuple(index_vector), flip(index_vector)]
     for i in range(0, 3):
         index_vector = rotate(index_vector)
         rots.append(index_vector)
