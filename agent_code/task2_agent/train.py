@@ -183,7 +183,7 @@ def updateQ(self):
             batch.append(t)  # TODO: prioritize interesting transitions
 
 
-    for i in range(len(batch)):
+    for i,t in enumerate(batch):
         all_feat_action = get_all_rotations(np.concatenate([batch[i].state, [ACTIONS.index(batch[i].action)]]))
         for j in range(len(all_feat_action)):
             # calculate target response Y using TD # TODO: n-step TD
