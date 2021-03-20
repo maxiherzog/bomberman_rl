@@ -28,6 +28,8 @@ STORE_FREQ = XP_BUFFER_SIZE * 4
 
 # Events
 EVADED_BOMB = "EVADED_BOMB"
+NO_CRATE_DESTROYED = "NO_CRATE_DESTROYED"
+NO_BOMB = "NO_BOMB"
 
 
 def setup_training(self):
@@ -51,10 +53,17 @@ def setup_training(self):
         self.logger.debug(f"Initializing Q")
         self.beta = np.zeros([8, len(ACTIONS)])
 
-    # measuring
+    # MEASUREING PARAMETERS
+    if not os.path.exists("analysis"):
+        os.makedirs("analysis")
     self.beta_dists = []
     self.tot_rewards = []
 
+    # hands on variables
+    self.crate_counter = 0
+    self.crates_destroyed = []
+    self.coin_counter = 0
+    self.coins_collected = []
 
 def game_events_occurred(
         self,
@@ -88,6 +97,18 @@ def game_events_occurred(
     #     events.append(PLACEHOLDER_EVENT)
     if e.BOMB_EXPLODED in events and not e.KILLED_SELF in events:
         events.append(EVADED_BOMB)
+
+    if e.BOMB_EXPLODED in events and not e.CRATE_DESTROYED in events:
+        events.append(NO_CRATE_DESTROYED)
+
+    if not e.BOMB_DROPPED in events:
+        events.append(NO_BOMB)
+
+    if e.CRATE_DESTROYED in events:
+        self.crate_counter += 1
+
+    if e.COIN_COLLECTED in events:
+        self.crate_counter += 1
 
     # state_to_features is defined in callbacks.py
     self.transitions.append(
@@ -131,6 +152,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             tot_reward += trans.reward
     self.tot_rewards.append(tot_reward)
     self.beta_dists.append(np.sum(self.beta))
+    self.crates_destroyed.append(self.crate_counter)
+    self.crate_counter = 0
 
     self.rounds_played += 1
     if self.rounds_played % XP_BUFFER_SIZE == 0:
@@ -147,6 +170,10 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             pickle.dump(self.tot_rewards, file)
         with open("analysis/beta-dists.pt", "wb") as file:
             pickle.dump(self.beta_dists, file)
+        with open("analysis/crates.pt", "wb") as file:
+            pickle.dump(self.crates_destroyed, file)
+        with open("analysis/coins.pt", "wb") as file:
+            pickle.dump(self.coins_collected, file)
 
 
 def updateQ(self):
@@ -179,15 +206,15 @@ def reward_from_events(self, events: List[str]) -> int:
     certain behavior.
     """
     game_rewards = {
-        e.COIN_COLLECTED: 2,
+        e.COIN_COLLECTED: 3,
         # e.KILLED_OPPONENT: 5,
         e.INVALID_ACTION: -1,
-        e.WAITED: -0.2,
-        e.CRATE_DESTROYED: 0.5,
+        e.CRATE_DESTROYED: 2,
         e.KILLED_SELF: -1,
         e.BOMB_DROPPED: 0.3,
-        EVADED_BOMB: 1
-        # e.KILLED_SELF: -5,
+        EVADED_BOMB: 1,
+        NO_BOMB: -0.05,
+        NO_CRATE_DESTROYED: -1.4,
     }
     reward_sum = 0
     for event in events:
