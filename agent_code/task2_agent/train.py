@@ -40,10 +40,23 @@ def setup_training(self):
     # (s, a, r, s')
     self.transitions = deque(maxlen=None)  #
 
+    # ensure analysis subfolder
+    if not os.path.exists("analysis"):
+        os.makedirs("analysis")
+
     if os.path.isfile("model.pt"):
         self.logger.info("Retraining from saved state.")
         with open("model.pt", "rb") as file:
             self.Q = pickle.load(file)
+
+        with open("analysis/Qdist.pt", "rb") as file:
+            self.Q_dists = pickle.load(file)
+        with open("analysis/tot_rewards.pt", "rb") as file:
+            self.tot_rewards = pickle.load(file)
+        with open("analysis/coins_collected.pt", "rb") as file:
+            self.coins_collected = pickle.load(file)
+        with open("analysis/crates_destroyed.pt", "rb") as file:
+            self.crates_destroyed = pickle.load(file)
     else:
         self.logger.debug(f"Initializing Q")
         self.Q = np.zeros([2, 2, 2, 2, 3, 3, 3, 5, len(ACTIONS)])
@@ -53,18 +66,16 @@ def setup_training(self):
         self.Q[:, :, 0, :, :, :, :, :, 2] = -1
         self.Q[:, :, :, 0, :, :, :, :, 3] = -1
 
-    # MEASUREING PARAMETERS
+        # init measured variables
+        self.Q_dists = []
+        self.tot_rewards = []
+        self.coins_collected = []
+        self.crates_destroyed = []
 
-    if not os.path.exists("analysis"):
-        os.makedirs("analysis")
-    self.Q_dists = []
-    self.tot_rewards = []
-
+    # init counters
     # hands on variables
     self.crate_counter = 0
-    self.crates_destroyed = []
     self.coin_counter = 0
-    self.coins_collected = []
 
 
 def game_events_occurred(
@@ -110,7 +121,7 @@ def game_events_occurred(
         self.crate_counter += 1
 
     if e.COIN_COLLECTED in events:
-        self.crate_counter += 1
+        self.coin_counter += 1
 
     # state_to_features is defined in callbacks.py
     self.transitions.append(
@@ -160,7 +171,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                     self.Q[tuple(trans.next_state)]
                 )  # TODO: SARSA vs Q-Learning V
             alpha = 0.1
-            gamma = 0.94
+            gamma = 0.8
             action_index = ACTIONS.index(trans.action)
 
             # get all symmetries

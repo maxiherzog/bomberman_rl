@@ -180,7 +180,6 @@ def state_to_features(game_state: dict) -> np.array:
         start = game_state["self"][3]
 
         save = [0, 0, 0, 0]
-        # LIKE x_off, y_off
         x, y = start
         neighbors = [
             (x, y)
@@ -198,15 +197,13 @@ def state_to_features(game_state: dict) -> np.array:
                 parent_dict = {start: start, neighbor: neighbor}
                 while len(frontier) > 0:
                     current = frontier.pop(0)
-
                     x, y = current
-                    # print(x, y)
                     available_neighbors = [
                         (x, y)
                         for (x, y) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
                         if free_space[x, y]
                     ]
-                    # print(available_neighbors)
+
                     for neineighbor in available_neighbors:
                         if neineighbor not in parent_dict:
                             frontier.append(neineighbor)
@@ -257,7 +254,6 @@ def state_to_features(game_state: dict) -> np.array:
                     parent_dict[neighbor] = current
                     dist_so_far[neighbor] = dist_so_far[current] + 1
 
-        # print(found_targets)
         found_ind = np.argmin(np.array(found_targets, dtype=object)[:, 2], axis=0)
         found = found_targets[found_ind]
         POI_position = found[0]
@@ -265,7 +261,6 @@ def state_to_features(game_state: dict) -> np.array:
         dist = POI_position - np.array(game_state["self"][3])
         POI_vector = np.sign(dist) + 1
         POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
-        # print(f"Suitable target found at {POI_position}, {POI_type}")
 
         # ALSO compute save directions
         save = np.zeros(len(x_off))
