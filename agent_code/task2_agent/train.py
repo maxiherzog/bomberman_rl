@@ -5,27 +5,44 @@ from typing import List
 import os
 import scipy.sparse as sp
 
+import json
+
 import events as e
 from .callbacks import state_to_features
 from .callbacks import ACTIONS
 from .callbacks import get_all_rotations
+from .callbacks import EPSILON
 import numpy as np
 from .sparseTensor import SparseTensor
+
 
 import time
 
 
-# This is only an example!
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
-
-# Hyper parameters -- DO modify
-# TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
-# RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
 # Events
 EVADED_BOMB = "EVADED_BOMB"
 NO_CRATE_DESTROYED = "NO_CRATE_DESTROYED"
 NO_BOMB = "NO_BOMB"
+
+
+# Hyper parameters -- DO modify
+# TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
+# RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
+ALPHA = 0.1
+GAMMA = 0.8
+GAME_REWARDS = {
+    e.COIN_COLLECTED: 2,
+    # e.KILLED_OPPONENT: 5,
+    e.INVALID_ACTION: -1,
+    e.CRATE_DESTROYED: 1,
+    e.KILLED_SELF: -2,
+    e.BOMB_DROPPED: 0.5,
+    EVADED_BOMB: 1,
+    NO_BOMB: -0.05,
+    NO_CRATE_DESTROYED: -2,
+}
 
 
 def setup_training(self):
@@ -72,6 +89,16 @@ def setup_training(self):
         self.tot_rewards = []
         self.coins_collected = []
         self.crates_destroyed = []
+
+        # dump hyper parameters as json
+        hyperparams = {
+            "ALPHA": ALPHA,
+            "GAMMA": GAMMA,
+            "EPSILON": EPSILON,
+            "GAME_REWARDS": GAME_REWARDS,
+        }
+        with open("analysis/hyperparams.json", "w") as file:
+            json.dump(hyperparams, file, ensure_ascii=False, indent=4)
 
     # init counters
     # hands on variables
@@ -171,63 +198,57 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                 V = np.max(
                     self.Q[tuple(trans.next_state)]
                 )  # TODO: SARSA vs Q-Learning V
-            alpha = 0.1
-            gamma = 0.8
             action_index = ACTIONS.index(trans.action)
 
             # get all symmetries
             origin_vec = np.concatenate((trans.state, [action_index]))
             # encountered_symmetry = False
             for rot in get_all_rotations(origin_vec):
-                self.Q[tuple(rot)] += alpha * (
-                    trans.reward + gamma * V - self.Q[tuple(origin_vec)]
+                self.Q[tuple(rot)] += ALPHA * (
+                    trans.reward + GAMMA * V - self.Q[tuple(origin_vec)]
                 )
 
-    # Store the model
-    with open(r"model.pt", "wb") as file:
-        pickle.dump(self.Q, file)
-
     self.tot_rewards.append(tot_reward)
-    with open("analysis/rewards.pt", "wb") as file:
-        pickle.dump(self.tot_rewards, file)
     self.Q_dists.append(np.sum(self.Q))
-    with open("analysis/Q-dists.pt", "wb") as file:
-        pickle.dump(self.Q_dists, file)
 
     self.crates_destroyed.append(self.crate_counter)
     self.crate_counter = 0
-    with open("analysis/crates.pt", "wb") as file:
-        pickle.dump(self.crates_destroyed, file)
+
     self.coins_collected.append(self.coin_counter)
     self.coin_counter = 0
-    with open("analysis/coins.pt", "wb") as file:
-        pickle.dump(self.coins_collected, file)
 
+    if last_game_state["round"] % 500 == 0:
+        store(self)
     # clear transitions -> ready for next game
     self.transitions = deque(maxlen=None)
 
 
+def store(self):
+    """
+    Stores all the files.
+    """
+    # Store the model
+    self.logger.debug("Storing model.")
+    with open(r"model.pt", "wb") as file:
+        pickle.dump(self.Q, file)
+    with open("analysis/rewards.pt", "wb") as file:
+        pickle.dump(self.tot_rewards, file)
+    with open("analysis/Q-dists.pt", "wb") as file:
+        pickle.dump(self.Q_dists, file)
+    with open("analysis/crates.pt", "wb") as file:
+        pickle.dump(self.crates_destroyed, file)
+    with open("analysis/coins.pt", "wb") as file:
+        pickle.dump(self.coins_collected, file)
+
+
 def reward_from_events(self, events: List[str]) -> int:
     """
-    *This is not a required function, but an idea to structure your code.*
-
     Here you can modify the rewards your agent get so as to en/discourage
     certain behavior.
     """
-    game_rewards = {
-        e.COIN_COLLECTED: 3,
-        # e.KILLED_OPPONENT: 5,
-        e.INVALID_ACTION: -1,
-        e.CRATE_DESTROYED: 2,
-        e.KILLED_SELF: -1,
-        e.BOMB_DROPPED: 0.3,
-        EVADED_BOMB: 1,
-        NO_BOMB: -0.05,
-        NO_CRATE_DESTROYED: -1.4,
-    }
     reward_sum = 0
     for event in events:
-        if event in game_rewards:
-            reward_sum += game_rewards[event]
+        if event in GAME_REWARDS:
+            reward_sum += GAME_REWARDS[event]
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
