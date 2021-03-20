@@ -222,6 +222,7 @@ def state_to_features(game_state: dict) -> np.array:
 
 
 def get_all_rotations(index_vector):
+    """Return all feature action tuples for given feature action tuple"""
     rots = [index_vector, flip(index_vector)]
     for i in range(0, 3):
         index_vector = rotate(index_vector)
