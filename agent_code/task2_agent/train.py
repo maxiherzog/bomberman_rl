@@ -24,6 +24,8 @@ Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"
 
 # Events
 EVADED_BOMB = "EVADED_BOMB"
+NO_CRATE_DESTROYED = "NO_CRATE_DESTROYED"
+NO_BOMB = "NO_BOMB"
 
 
 def setup_training(self):
@@ -46,16 +48,23 @@ def setup_training(self):
         self.logger.debug(f"Initializing Q")
         self.Q = np.zeros([2, 2, 2, 2, 3, 3, 3, 5, len(ACTIONS)])
 
-        self.Q[1, :, :, :, :, :, :, :, 2] = -1
-        self.Q[:, 1, :, :, :, :, :, :, 1] = -1
-        self.Q[:, :, 1, :, :, :, :, :, 0] = -1
-        self.Q[:, :, :, 1, :, :, :, :, 3] = -1
-        # self.Q = SparseTensor([2, 2, 3, 3, 3, 5, len(ACTIONS)])
-        # self.Q = SparseTensor([14 * 2 + 1, 14 * 2 + 1, 4, 3, 3, 3, 3, 3, 3, 3, 3, len(ACTIONS)])
+        self.Q[0, :, :, :, :, :, :, :, 2] = -1
+        self.Q[:, 0, :, :, :, :, :, :, 1] = -1
+        self.Q[:, :, 0, :, :, :, :, :, 0] = -1
+        self.Q[:, :, :, 0, :, :, :, :, 3] = -1
 
-    # measuring
+    # MEASUREING PARAMETERS
+
+    if not os.path.exists("analysis"):
+        os.makedirs("analysis")
     self.Q_dists = []
     self.tot_rewards = []
+
+    # hands on variables
+    self.crate_counter = 0
+    self.crates_destroyed = []
+    self.coin_counter = 0
+    self.coins_collected = []
 
 
 def game_events_occurred(
@@ -90,6 +99,18 @@ def game_events_occurred(
     #     events.append(PLACEHOLDER_EVENT)
     if e.BOMB_EXPLODED in events and not e.KILLED_SELF in events:
         events.append(EVADED_BOMB)
+
+    if e.BOMB_EXPLODED in events and not e.CRATE_DESTROYED in events:
+        events.append(NO_CRATE_DESTROYED)
+
+    if not e.BOMB_EXPLODED in events:
+        events.append(NO_BOMB)
+
+    if e.CRATE_DESTROYED in events:
+        self.crate_counter += 1
+
+    if e.COIN_COLLECTED in events:
+        self.crate_counter += 1
 
     # state_to_features is defined in callbacks.py
     self.transitions.append(
@@ -127,54 +148,32 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     )
 
     tot_reward = 0
-    counter = 0
+
     for trans in self.transitions:
         if trans.action != None:
-            counter += 1
             tot_reward += trans.reward
 
             if trans.next_state is None:
                 V = 0
             else:
                 V = np.max(
-                    # self.Q.get_last_splice(trans.next_state)
                     self.Q[tuple(trans.next_state)]
                 )  # TODO: SARSA vs Q-Learning V
-            alpha = 0.1
+            alpha = 0.5
             gamma = 0.9
             action_index = ACTIONS.index(trans.action)
 
             # get all symmetries
             origin_vec = np.concatenate((trans.state, [action_index]))
-            encountered_symmetry = False
+            # encountered_symmetry = False
             for rot in get_all_rotations(origin_vec):
-                # if self.Q.already_exists(rot):
-                #     entry = self.Q.get_entry(rot)
-                #     self.Q.change_value(
-                #         rot, entry + alpha * (trans.reward + gamma * V - entry)
-                #     )
-                #     encountered_symmetry = True
                 self.Q[tuple(rot)] += alpha * (
                     trans.reward + gamma * V - self.Q[tuple(rot)]
                 )
 
-        # if not encountered_symmetry:
-        #     self.Q.add_entry(rot, alpha * (trans.reward + gamma * V))
-    # print(f"counter {counter}")
     # Store the model
     with open(r"model.pt", "wb") as file:
         pickle.dump(self.Q, file)
-
-    # measure
-    # Qc = np.zeros(self.Q.shape)
-    # Qc[0, :, :14] = 1 # OBEN
-    # Qc[0, :, :14,  0, :] = 0
-    # Qc[2, :, -14:] = 1 # UNTEN
-    # Qc[2, :, -14:, 0, :] = 0
-    # Qc[3, :14, :] = 1 # LINKS
-    # Qc[3, :14,  :, :, 0] = 0
-    # Qc[1, -14:, :] = 1 # RECHTS
-    # Qc[1, -14:, :, :, 0] = 0
 
     self.tot_rewards.append(tot_reward)
     with open("analysis/rewards.pt", "wb") as file:
@@ -182,6 +181,15 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.Q_dists.append(np.sum(self.Q))
     with open("analysis/Q-dists.pt", "wb") as file:
         pickle.dump(self.Q_dists, file)
+
+    self.crates_destroyed.append(self.crate_counter)
+    self.crate_counter = 0
+    with open("analysis/crates.pt", "wb") as file:
+        pickle.dump(self.crates_destroyed, file)
+    self.coins_collected.append(self.coin_counter)
+    self.coin_counter = 0
+    with open("analysis/coins.pt", "wb") as file:
+        pickle.dump(self.coins_collected, file)
 
     # clear transitions -> ready for next game
     self.transitions = deque(maxlen=None)
@@ -195,15 +203,16 @@ def reward_from_events(self, events: List[str]) -> int:
     certain behavior.
     """
     game_rewards = {
-        e.COIN_COLLECTED: 2,
+        e.COIN_COLLECTED: 3,
         # e.KILLED_OPPONENT: 5,
         e.INVALID_ACTION: -1,
-        e.WAITED: -0.2,
-        e.CRATE_DESTROYED: 0.5,
+        # e.WAITED: -0.2,
+        e.CRATE_DESTROYED: 2,
         e.KILLED_SELF: -1,
         e.BOMB_DROPPED: 0.3,
-        EVADED_BOMB: 1
-        # e.KILLED_SELF: -5,
+        EVADED_BOMB: 1,
+        NO_BOMB: -0.1,
+        NO_CRATE_DESTROYED: -1.3,
     }
     reward_sum = 0
     for event in events:

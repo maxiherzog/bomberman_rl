@@ -48,7 +48,7 @@ def act(self, game_state: dict) -> str:
     # TODO: Exploration vs exploitation
 
     # epsilon greedy
-    epsilon = 0.1
+    epsilon = 0.2
     if self.train and random.random() < epsilon:
         self.logger.debug("Epsilon-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
@@ -136,27 +136,27 @@ def state_to_features(game_state: dict) -> np.array:
     # check surrounding tiles
     # x_off = [0, 1, 1, 1, 0, -1, -1, -1]  # , 2, -2, 0, 0]
     # y_off = [1, 1, 0, -1, -1, -1, 0, 1]  # , 0, 0, 2, -2]
-    x_off = [0, 1, 0, -1]  # , 2, -2, 0, 0]
-    y_off = [1, 0, -1, 0]  # , 0, 0, 2, -2]
-    blocked = np.zeros(len(x_off))
-    for i in range(len(blocked)):
-        if (
-            game_state["self"][3][0] + x_off[i] > 16
-            or game_state["self"][3][0] + x_off[i] < 0
-        ):
-            blocked[i] = 0
-        elif (
-            game_state["self"][3][1] + y_off[i] > 16
-            or game_state["self"][3][1] + y_off[i] < 0
-        ):
-            blocked[i] = 0
-        else:
-            blocked[i] = np.abs(
-                game_state["field"][
-                    game_state["self"][3][0] + x_off[i],
-                    game_state["self"][3][1] + y_off[i],
-                ]
-            )
+    # x_off = [0, 1, 0, -1]  # , 2, -2, 0, 0]
+    # y_off = [1, 0, -1, 0]  # , 0, 0, 2, -2]
+    # save = np.zeros(len(x_off))
+    # for i in range(len(save)):
+    #     if (
+    #         game_state["self"][3][0] + x_off[i] > 16
+    #         or game_state["self"][3][0] + x_off[i] < 0
+    #     ):
+    #         save[i] = 0
+    #     elif (
+    #         game_state["self"][3][1] + y_off[i] > 16
+    #         or game_state["self"][3][1] + y_off[i] < 0
+    #     ):
+    #         save[i] = 0
+    #     else:
+    #         save[i] = np.abs(
+    #             game_state["field"][
+    #                 game_state["self"][3][0] + x_off[i],
+    #                 game_state["self"][3][1] + y_off[i],
+    #             ]
+    #         )
 
     # mod_pos = [game_state["self"][3][0] % 2, game_state["self"][3][1] % 2]
 
@@ -168,6 +168,43 @@ def state_to_features(game_state: dict) -> np.array:
         POI_vector = np.sign(dist) + 1
         POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
         POI_type = 0
+
+        free_space = game_state["field"] == 0
+        free_space[game_state["bombs"][0][0]] = False
+
+        start = game_state["self"][3]
+
+        save = [0, 0, 0, 0]
+        # LIKE x_off, y_off
+        x, y = start
+        neighbors = [
+            (x, y) for (x, y) in [(x, y + 1), (x + 1, y), (x, y - 1), (x - 1, y)]
+        ]
+
+        for i, neighbor in enumerate(neighbors):
+            if free_space[neighbor]:
+                frontier = [neighbor]
+                parent_dict = {start: start, neighbor: neighbor}
+                while len(frontier) > 0:
+                    current = frontier.pop(0)
+
+                    x, y = current
+                    available_neighbors = [
+                        (x, y)
+                        for (x, y) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+                        if free_space[x, y]
+                    ]
+                    for neineighbor in available_neighbors:
+                        if neineighbor not in parent_dict:
+                            frontier.append(neineighbor)
+                            parent_dict[neineighbor] = neighbor
+                            dist = game_state["bombs"][0][0] - np.array(neineighbor)
+                            if all(dist != 0) or np.sum(np.abs(dist)) > 3:
+                                save[i] = 1
+                                break
+                    else:
+                        continue
+                    break
     else:
         # for crates, coins: BFS
 
@@ -195,7 +232,7 @@ def state_to_features(game_state: dict) -> np.array:
             all_neighbors = [
                 (x, y) for (x, y) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
             ]
-
+            shuffle(all_neighbors)
             for neighbor in all_neighbors:
                 if game_state["field"][neighbor] == 1:  # CRATE
                     found_targets.append([neighbor, 1, dist_so_far[current] + 1])
@@ -217,12 +254,27 @@ def state_to_features(game_state: dict) -> np.array:
         POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
         # print(f"Suitable target found at {POI_position}, {POI_type}")
 
+        # ALSO compute save directions
+        x_off = [0, 1, 0, -1]
+        y_off = [1, 0, -1, 0]
+        save = np.zeros(len(x_off))
+        for i in range(len(save)):
+            save[i] = (
+                -np.abs(
+                    game_state["field"][
+                        game_state["self"][3][0] + x_off[i],
+                        game_state["self"][3][1] + y_off[i],
+                    ]
+                )
+                + 1
+            )
+
     # channels = []
     # channels.append(...)
     # concatenate them as a feature tensor (they must have the same shape), ...
     # stacked_channels = np.stack(channels)
     # and return them as a vector
-    return np.concatenate((blocked, POI_vector, [POI_type], [POI_dist])).astype(int)
+    return np.concatenate((save, POI_vector, [POI_type], [POI_dist])).astype(int)
     # stacked_channels.reshape(-1)
 
 
@@ -250,7 +302,7 @@ def rotate(index_vector):
         action_index = index_vector[8]  # BOMB and WAIT invariant
 
     return (
-        index_vector[1],  # blocked tiles
+        index_vector[1],  # save tiles
         index_vector[2],
         index_vector[3],
         index_vector[0],
@@ -287,7 +339,7 @@ def flip(index_vector):
         action_index = index_vector[8]  # UP, DOWN, BOMB and WAIT invariant
 
     return (
-        index_vector[0],  # blocked tiles
+        index_vector[0],  # save tiles
         index_vector[3],
         index_vector[2],
         index_vector[1],
