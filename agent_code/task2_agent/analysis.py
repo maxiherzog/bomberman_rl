@@ -45,7 +45,7 @@ with open("analysis/rewards.pt", "rb") as file:
     plt.plot(rewards)
     plt.xlabel("episode")
     plt.ylabel("reward")
-    plt.title("rewards (averaged)")
+    plt.title("rewards")
     plt.savefig("analysis/rewards.pdf")
     plt.show()
 
