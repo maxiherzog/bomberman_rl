@@ -31,7 +31,7 @@ NEW_PLACE = "NEW_PLACE"
 ALPHA = 0.01
 GAMMA = 0.9
 N = 2  # for n-step TD Q learning
-XP_BUFFER_SIZE = 4
+XP_BUFFER_SIZE = 10     # higher batch size for forest
 
 GAME_REWARDS = {
     e.COIN_COLLECTED: 1,
@@ -56,7 +56,7 @@ GAME_REWARDS = {
 }
 
 
-STORE_FREQ = 500
+STORE_FREQ = 50
 
 
 def setup_training(self):
@@ -79,10 +79,10 @@ def setup_training(self):
     if os.path.isfile("model.pt"):
         self.logger.info("Retraining from saved state.")
         with open("model.pt", "rb") as file:
-            self.beta = pickle.load(file)
+            self.forest = pickle.load(file)
         self.logger.info("Reloading analysis variables.")
-        with open("analysis/beta-dists.pt", "rb") as file:
-            self.beta_dists = pickle.load(file)
+        #with open("analysis/beta-dists.pt", "rb") as file:
+        #    self.beta_dists = pickle.load(file)
         with open("analysis/rewards.pt", "rb") as file:
             self.tot_rewards = pickle.load(file)
         with open("analysis/coins.pt", "rb") as file:
@@ -90,11 +90,11 @@ def setup_training(self):
         with open("analysis/crates.pt", "rb") as file:
             self.crates_destroyed = pickle.load(file)
     else:
-        self.logger.debug(f"Initializing Q")
-        self.beta = np.zeros([8, len(ACTIONS)])
+        #self.logger.debug(f"Initializing Q")
+        #self.forest =  # not needed because initialized in callbacks.py
 
         # init measured variables
-        self.beta_dists = []
+        #self.beta_dists = []
         self.tot_rewards = []
         self.coins_collected = []
         self.crates_destroyed = []
@@ -215,7 +215,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         if trans.action != None:
             tot_reward += trans.reward
     self.tot_rewards.append(tot_reward)
-    self.beta_dists.append(np.sum(self.beta))
+    #self.beta_dists.append(np.sum(self.beta))
 
     self.crates_destroyed.append(self.crate_counter)
     self.crate_counter = 0
@@ -242,11 +242,11 @@ def store(self):
     # Store the model
     self.logger.debug("Storing model.")
     with open(r"model.pt", "wb") as file:
-        pickle.dump(self.beta, file)
+        pickle.dump(self.forest, file)
     with open("analysis/rewards.pt", "wb") as file:
         pickle.dump(self.tot_rewards, file)
-    with open("analysis/beta-dists.pt", "wb") as file:
-        pickle.dump(self.beta_dists, file)
+    #with open("analysis/beta-dists.pt", "wb") as file:
+    #    pickle.dump(self.beta_dists, file)
     with open("analysis/crates.pt", "wb") as file:
         pickle.dump(self.crates_destroyed, file)
     with open("analysis/coins.pt", "wb") as file:
@@ -262,7 +262,8 @@ def updateQ(self):
         else:
             batch.append(occasion)
             occasion = []
-
+    Ys = []
+    Xs = []
     for occ in batch:
         for i, t in enumerate(occ):
             all_feat_action = get_all_rotations(
@@ -278,15 +279,20 @@ def updateQ(self):
                     Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
                 else:
                     Y = t.reward
-                # optimize Q towards Y
+                Ys.append(Y)
                 state = np.array(all_feat_action[j][:-1])
-                action = all_feat_action[j][-1]
-                self.beta[:, action] += (
-                    ALPHA
-                    / len(self.transitions)
-                    * state
-                    * (Y - state.T @ self.beta[:, action])
-                )  # TODO: think about batch size division
+                Xs.append(state)
+                # # optimize Q towards Y
+                # state = np.array(all_feat_action[j][:-1])
+                # action = all_feat_action[j][-1]
+                #
+                # self.beta[:, action] += (
+                #     ALPHA
+                #     / len(self.transitions)
+                #     * state
+                #     * (Y - state.T @ self.beta[:, action])
+                # )  # TODO: think about batch size division
+    self.forest.fit(Xs, Ys)
 
 
 

@@ -5,8 +5,10 @@ import time
 import numpy as np
 from random import shuffle
 
+from sklearn.ensemble import RandomForestRegressor
+
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-EPSILON = 0.01
+EPSILON = 0.1
 
 
 def setup(self):
@@ -23,14 +25,17 @@ def setup(self):
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    if not os.path.isfile("model.pt"):
+    if True:#not os.path.isfile("model.pt"):
         self.logger.info("Setting up model from scratch.")
-        self.beta = np.zeros([8, len(ACTIONS)])
+        self.forest = RandomForestRegressor(n_estimators=30, max_depth=None, random_state=0)
+        Xs = [np.zeros(9)]
+        Ys = [0]
+        self.forest.fit(Xs, Ys)
 
     else:
         self.logger.info("Loading model.")
         with open("model.pt", "rb") as file:
-            self.beta = pickle.load(file)
+            self.forest = pickle.load(file)
 
 
 def act(self, game_state: dict) -> str:
@@ -89,7 +94,8 @@ def act(self, game_state: dict) -> str:
 
 
 def Q(self, X) -> np.array:
-    return X @ self.beta
+    return np.zeros(6)
+    #return self.forest.predict([X])[0]
 
 
 def state_to_features(game_state: dict) -> np.array:
