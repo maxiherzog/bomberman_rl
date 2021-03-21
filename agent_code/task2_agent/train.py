@@ -287,6 +287,30 @@ def store(self):
         pickle.dump(self.coins_collected, file)
 
 
+def updateQ(self):
+    """
+    Updates the Q function.
+    """
+    for trans in self.transitions:
+        if trans.action != None:
+
+            if trans.next_state is None:
+                V = 0
+            else:
+                V = np.max(
+                    self.Q[tuple(trans.next_state)]
+                )  # TODO: SARSA vs Q-Learning V
+            action_index = ACTIONS.index(trans.action)
+
+            # get all symmetries
+            origin_vec = np.concatenate((trans.state, [action_index]))
+            # encountered_symmetry = False
+            for rot in get_all_rotations(origin_vec):
+                self.Q[tuple(rot)] += ALPHA * (
+                    trans.reward + GAMMA * V - self.Q[tuple(origin_vec)]
+                )
+
+
 def reward_from_events(self, events: List[str]) -> int:
     """
     Here you can modify the rewards your agent get so as to en/discourage
