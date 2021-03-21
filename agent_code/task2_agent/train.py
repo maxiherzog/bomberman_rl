@@ -232,27 +232,14 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         )
     )
 
-    tot_reward = 0
+    # UPDATE Q
+    updateQ()
 
+    # measure total reward
+    tot_reward = 0
     for trans in self.transitions:
         if trans.action != None:
             tot_reward += trans.reward
-
-            if trans.next_state is None:
-                V = 0
-            else:
-                V = np.max(
-                    self.Q[tuple(trans.next_state)]
-                )  # TODO: SARSA vs Q-Learning V
-            action_index = ACTIONS.index(trans.action)
-
-            # get all symmetries
-            origin_vec = np.concatenate((trans.state, [action_index]))
-            # encountered_symmetry = False
-            for rot in get_all_rotations(origin_vec):
-                self.Q[tuple(rot)] += ALPHA * (
-                    trans.reward + GAMMA * V - self.Q[tuple(origin_vec)]
-                )
 
     self.tot_rewards.append(tot_reward)
     self.Q_dists.append(np.sum(self.Q))
