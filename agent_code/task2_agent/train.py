@@ -159,7 +159,6 @@ def game_events_occurred(
         if new_game_state["self"][0] not in self.visited:
             self.visited.append(new_game_state["self"][3])
             events.append(NEW_PLACE)
-            self.logger.info("New Place!"+str( len(self.visited)))
 
     # state_to_features is defined in callbacks.py
     self.transitions.append(
