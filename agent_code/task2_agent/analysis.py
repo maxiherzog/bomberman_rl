@@ -25,7 +25,7 @@ def average_every(x, w):
     return arr
 
 
-BATCHES = 50
+BATCHES = 10
 
 key = ["reward", "crates", "coins", "length", "useless_bombs"]
 title = [
@@ -53,7 +53,7 @@ with open("model/analysis_data.pt", "rb") as file:
                 int(len(analysis_data[key[i]]) / BATCHES) + 1,
             )
             plt.plot(
-                np.arange(len(arr)) * len(analysis_data[key[i]]) / len(arr),
+                np.arange(len(arr)) * len(analysis_data[key[i]]) / len(arr)  + len(analysis_data[key[i]])/BATCHES/2,
                 arr,
                 label=f"average (batch size={int(len(analysis_data[key[i]])/BATCHES)})",
             )
