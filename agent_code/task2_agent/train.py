@@ -26,6 +26,7 @@ Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"
 EVADED_BOMB = "EVADED_BOMB"
 NO_CRATE_DESTROYED = "NO_CRATE_DESTROYED"
 NO_BOMB = "NO_BOMB"
+NEW_PLACE = "NEW_PLACE"
 
 
 # Hyper parameters -- DO modify
@@ -34,19 +35,23 @@ NO_BOMB = "NO_BOMB"
 ALPHA = 0.2
 GAMMA = 0.9
 N = 4           # for n-step TD Q learning
+XP_BUFFER_SIZE = 2
+
 GAME_REWARDS = {
-    e.COIN_COLLECTED: 2,
+    e.COIN_COLLECTED: 1,
     # e.KILLED_OPPONENT: 5,
-    e.INVALID_ACTION: -1,
-    e.CRATE_DESTROYED: 1,
-    e.KILLED_SELF: -2,
+    e.INVALID_ACTION: -0.2,
+    e.CRATE_DESTROYED: 0.5,
+    e.KILLED_SELF: -1,
+    e.WAITED: -0.2,
+    NEW_PLACE: 0.1,
     # e.BOMB_DROPPED: 0.5,
     # EVADED_BOMB: 1,
-    NO_BOMB: -0.05,
-    NO_CRATE_DESTROYED: -0.5,
+    #NO_BOMB: -0.05,
+    #NO_CRATE_DESTROYED: -0.5,
 }
 
-XP_BUFFER_SIZE = 10
+
 STORE_FREQ = 500
 
 def setup_training(self):
@@ -95,6 +100,8 @@ def setup_training(self):
             "ALPHA": ALPHA,
             "GAMMA": GAMMA,
             "EPSILON": EPSILON,
+            "XP_BUFFER_SIZE": XP_BUFFER_SIZE,
+            "N": N,
             "GAME_REWARDS": GAME_REWARDS,
         }
         with open("analysis/hyperparams.json", "w") as file:
@@ -104,6 +111,7 @@ def setup_training(self):
     # hands on variables
     self.crate_counter = 0
     self.coin_counter = 0
+    self.visited = []
 
 def game_events_occurred(
         self,
@@ -149,6 +157,11 @@ def game_events_occurred(
 
     if e.COIN_COLLECTED in events:
         self.coin_counter += 1
+
+    if e.MOVED_UP or e.MOVED_DOWN or e.MOVED_LEFT or e.MOVED_RIGHT:
+        if new_game_state["self"][0] not in self.visited:
+            self.visited.append(new_game_state["self"][0])
+            events.append(NEW_PLACE)
 
     # state_to_features is defined in callbacks.py
     self.transitions.append(
@@ -199,6 +212,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.coins_collected.append(self.coin_counter)
     self.coin_counter = 0
 
+    self.visited = []
+
     self.rounds_played += 1
     if self.rounds_played % XP_BUFFER_SIZE == 0:
         updateQ(self)
@@ -215,11 +230,11 @@ def store(self):
     # Store the model
     self.logger.debug("Storing model.")
     with open(r"model.pt", "wb") as file:
-        pickle.dump(self.Q, file)
+        pickle.dump(self.beta, file)
     with open("analysis/rewards.pt", "wb") as file:
         pickle.dump(self.tot_rewards, file)
-    with open("analysis/Q-dists.pt", "wb") as file:
-        pickle.dump(self.Q_dists, file)
+    with open("analysis/beta-dists.pt", "wb") as file:
+        pickle.dump(self.beta_dists, file)
     with open("analysis/crates.pt", "wb") as file:
         pickle.dump(self.crates_destroyed, file)
     with open("analysis/coins.pt", "wb") as file:

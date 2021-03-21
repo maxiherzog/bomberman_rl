@@ -2,12 +2,14 @@
     "ALPHA": 0.2,
     "GAMMA": 0.9,
     "EPSILON": 0.2,
+    "XP_BUFFER_SIZE": 2,
+    "N": 4,
     "GAME_REWARDS": {
-        "COIN_COLLECTED": 2,
-        "INVALID_ACTION": -1,
-        "CRATE_DESTROYED": 1,
-        "KILLED_SELF": -2,
-        "NO_BOMB": -0.05,
-        "NO_CRATE_DESTROYED": -0.5
+        "COIN_COLLECTED": 1,
+        "INVALID_ACTION": -0.2,
+        "CRATE_DESTROYED": 0.5,
+        "KILLED_SELF": -1,
+        "WAITED": -0.2,
+        "NEW_PLACE": 0.1
     }
 }

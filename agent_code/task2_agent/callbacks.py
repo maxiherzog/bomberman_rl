@@ -26,6 +26,7 @@ def setup(self):
     """
     if not os.path.isfile("model.pt"):
         self.logger.info("Setting up model from scratch.")
+        self.beta = np.zeros([8, len(ACTIONS)])
 
     else:
         self.logger.info("Loading model.")
