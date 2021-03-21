@@ -31,18 +31,18 @@ BLOCKED_SELF_IN_UNSAFE_SPACE = "BLOCKED_SELF_IN_UNSAFE_SPACE"
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 ALPHA = 0.01
-GAMMA = 0.9
+GAMMA = 0.93
 GAME_REWARDS = {
-    e.COIN_COLLECTED: 3,
+    e.COIN_COLLECTED: 1,
     # e.KILLED_OPPONENT: 5,
     e.INVALID_ACTION: -1,
-    e.CRATE_DESTROYED: 2,
-    # e.KILLED_SELF: -2,
+    e.CRATE_DESTROYED: 0.5,
     e.BOMB_DROPPED: 0.05,
     EVADED_BOMB: 0.25,
     NO_BOMB: -0.01,
-    BLOCKED_SELF_IN_UNSAFE_SPACE: -10,
-    NO_CRATE_DESTROYED: -5,
+    BLOCKED_SELF_IN_UNSAFE_SPACE: -5,
+    e.KILLED_SELF: -2,
+    NO_CRATE_DESTROYED: -3,
 }
 
 
@@ -59,23 +59,18 @@ def setup_training(self):
     self.transitions = deque(maxlen=None)  #
 
     # ensure analysis subfolder
-    if not os.path.exists("analysis"):
-        os.makedirs("analysis")
+    if not os.path.exists("model"):
+        os.makedirs("model")
 
-    if os.path.isfile("model.pt"):
+    if os.path.isfile("model/model.pt"):
         self.logger.info("Retraining from saved state.")
-        with open("model.pt", "rb") as file:
+        with open("model/model.pt", "rb") as file:
             self.Q = pickle.load(file)
 
         self.logger.info("Reloading analysis variables.")
-        with open("analysis/Q-dists.pt", "rb") as file:
-            self.Q_dists = pickle.load(file)
-        with open("analysis/rewards.pt", "rb") as file:
-            self.tot_rewards = pickle.load(file)
-        with open("analysis/coins.pt", "rb") as file:
-            self.coins_collected = pickle.load(file)
-        with open("analysis/crates.pt", "rb") as file:
-            self.crates_destroyed = pickle.load(file)
+        with open("model/analysis_data.pt", "rb") as file:
+            self.analysis_data = pickle.load(file)
+
     else:
         self.logger.debug(f"Initializing Q")
         self.Q = np.zeros([2, 2, 2, 2, 3, 3, 3, 5, len(ACTIONS)])
@@ -107,16 +102,16 @@ def setup_training(self):
         self.Q[:, :, :, 1, 2, :, 2, :, 3] += 1
 
         # walk away from bomb (only if safe) if ON BOMB
-        self.Q[1, :, :, :, :, :, 0, 0, 0] += 1
-        self.Q[:, 1, :, :, :, :, 0, 0, 1] += 1
-        self.Q[:, :, 1, :, :, :, 0, 0, 2] += 1
-        self.Q[:, :, :, 1, :, :, 0, 0, 3] += 1
+        self.Q[1, :, :, :, :, :, 0, :, 0] += 1
+        self.Q[:, 1, :, :, :, :, 0, :, 1] += 1
+        self.Q[:, :, 1, :, :, :, 0, :, 2] += 1
+        self.Q[:, :, :, 1, :, :, 0, :, 3] += 1
 
-        # and in streight lines
-        self.Q[:, :, 1, :, 1, 0, 0, 1:, 2] += 1
-        self.Q[:, :, :, 1, 2, 1, 0, 1:, 3] += 1
-        self.Q[1, :, :, :, 1, 2, 0, 1:, 0] += 1
-        self.Q[:, 1, :, :, 0, 1, 0, 1:, 1] += 1
+        # and in straight lines
+        # self.Q[:, :, 1, :, 1, 0, 0, 1:, 2] += 1
+        # self.Q[:, :, :, 1, 2, 1, 0, 1:, 3] += 1
+        # self.Q[1, :, :, :, 1, 2, 0, 1:, 0] += 1
+        # self.Q[:, 1, :, :, 0, 1, 0, 1:, 1] += 1
 
         # and dont fucking WAIT
         self.Q[:, :, :, :, :, :, 0, :, 4] += -1
@@ -124,10 +119,14 @@ def setup_training(self):
         self.Q[0, 0, 0, 0, :, :, 0, :, 4] += 1
 
         # init measured variables
-        self.Q_dists = []
-        self.tot_rewards = []
-        self.coins_collected = []
-        self.crates_destroyed = []
+        self.analysis_data = {
+            "Q_sum": [],
+            "reward": [],
+            "coins": [],
+            "crates": [],
+            "length": [],
+            "useless_bombs": [],
+        }
 
         # dump hyper parameters as json
         hyperparams = {
@@ -136,13 +135,14 @@ def setup_training(self):
             "EPSILON": EPSILON,
             "GAME_REWARDS": GAME_REWARDS,
         }
-        with open("analysis/hyperparams.json", "w") as file:
+        with open("model/hyperparams.json", "w") as file:
             json.dump(hyperparams, file, ensure_ascii=False, indent=4)
 
     # init counters
     # hands on variables
     self.crate_counter = 0
     self.coin_counter = 0
+    self.useless_bombs_counter = 0
 
 
 def game_events_occurred(
@@ -180,6 +180,7 @@ def game_events_occurred(
 
     if e.BOMB_EXPLODED in events and not e.CRATE_DESTROYED in events:
         events.append(NO_CRATE_DESTROYED)
+        self.useless_bombs_counter += 1
 
     if not e.BOMB_DROPPED in events:
         events.append(NO_BOMB)
@@ -241,19 +242,21 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         if trans.action != None:
             tot_reward += trans.reward
 
-    self.tot_rewards.append(tot_reward)
-    self.Q_dists.append(np.sum(self.Q))
-
-    self.crates_destroyed.append(self.crate_counter)
-    self.crate_counter = 0
-
-    self.coins_collected.append(self.coin_counter)
-    self.coin_counter = 0
+    self.analysis_data["reward"].append(tot_reward)
+    self.analysis_data["Q_sum"].append(np.sum(self.Q))
+    self.analysis_data["crates"].append(self.crate_counter)
+    self.analysis_data["coins"].append(self.coin_counter)
+    self.analysis_data["length"].append(last_game_state["step"])
+    self.analysis_data["useless_bombs"].append(self.useless_bombs_counter)
 
     if last_game_state["round"] % 500 == 0:
         store(self)
     # clear transitions -> ready for next game
     self.transitions = deque(maxlen=None)
+    # RESET Counters
+    self.crate_counter = 0
+    self.coin_counter = 0
+    self.useless_bombs_counter = 0
 
 
 def store(self):
@@ -262,16 +265,10 @@ def store(self):
     """
     # Store the model
     self.logger.debug("Storing model.")
-    with open(r"model.pt", "wb") as file:
+    with open(r"model/model.pt", "wb") as file:
         pickle.dump(self.Q, file)
-    with open("analysis/rewards.pt", "wb") as file:
-        pickle.dump(self.tot_rewards, file)
-    with open("analysis/Q-dists.pt", "wb") as file:
-        pickle.dump(self.Q_dists, file)
-    with open("analysis/crates.pt", "wb") as file:
-        pickle.dump(self.crates_destroyed, file)
-    with open("analysis/coins.pt", "wb") as file:
-        pickle.dump(self.coins_collected, file)
+    with open("model/analysis_data.pt", "wb") as file:
+        pickle.dump(self.analysis_data, file)
 
 
 def updateQ(self):

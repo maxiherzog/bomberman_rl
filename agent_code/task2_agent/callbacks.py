@@ -6,7 +6,7 @@ import numpy as np
 from random import shuffle
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-EPSILON = 0.01
+EPSILON = 0.05
 
 
 def setup(self):
@@ -23,12 +23,12 @@ def setup(self):
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    if self.train or not os.path.isfile("model.pt"):
+    if self.train or not os.path.isfile("model/model.pt"):
         self.logger.info("Setting up model from scratch.")
 
     else:
         self.logger.info("Loading model.")
-        with open("model.pt", "rb") as file:
+        with open("model/model.pt", "rb") as file:
             self.Q = pickle.load(file)
 
 
