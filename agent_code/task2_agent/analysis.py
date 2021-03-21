@@ -22,7 +22,7 @@ def average_every(x, w):
     return arr
 
 
-BATCHES = 30  # 50
+BATCHES = 10  # 50
 
 # with open(r"model.pt", "rb") as file:
 #     Q = pickle.load(file)
