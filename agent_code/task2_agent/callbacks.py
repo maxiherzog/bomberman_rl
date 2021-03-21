@@ -6,7 +6,7 @@ import numpy as np
 from random import shuffle
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-EPSILON = 0.2
+EPSILON = 0.01
 
 
 def setup(self):
@@ -41,7 +41,7 @@ def act(self, game_state: dict) -> str:
     :param game_state: The dictionary that describes everything on the board.
     :return: The action to take as a string.
     """
-
+    # print("-----------------")
     feat = state_to_features(game_state)
     self.logger.debug(
         "Querying model for action with feature " + str(tuple(feat)) + "."
@@ -54,7 +54,7 @@ def act(self, game_state: dict) -> str:
         self.logger.debug("EPSILON-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
 
-    start = time.time()
+    # start = time.time()
     # get all symmetries
     # Qs = []
     # for act in range(len(ACTIONS)):
@@ -68,9 +68,10 @@ def act(self, game_state: dict) -> str:
     #     else:  # if not encountered symmetry
     #         Qs.append(0)
     Qs = self.Q[tuple(feat)]
+    self.logger.debug("Qs for this situation: " + str(Qs))
 
     action_index = np.random.choice(np.flatnonzero(Qs == np.max(Qs)))
-    self.logger.debug("Choosing an action took " + str((time.time() - start)) + "ms.")
+    # self.logger.debug("Choosing an action took " + str((time.time() - start)) + "ms.")
 
     # soft-max
 
@@ -81,6 +82,8 @@ def act(self, game_state: dict) -> str:
     # self.logger.debug("softmax:" + str(softmax))
     # action_index = np.random.choice(np.arange(len(ACTIONS)), p=softmax)
 
+    # print(feat)
+    # print("ACTION choosen: " + ACTIONS[action_index])
     self.logger.debug("ACTION choosen: " + ACTIONS[action_index])
     return ACTIONS[action_index]
 
@@ -110,7 +113,7 @@ def state_to_features(game_state: dict) -> np.array:
 
     # if game_state["bombs"] != []:
     #     # bombs_dist = np.matrix(game_state["bombs"][:, 0])
-    #     # print(bombs_dist)
+    #     # # print(bombs_dist)
     #     # distance = bombs_dist - np.array(game_state["self"][3])
     #     # closest_index = np.argmin(
     #     #     np.sum(np.abs(distance), axis=1)
@@ -202,7 +205,7 @@ def state_to_features(game_state: dict) -> np.array:
             for i, neighbor in enumerate(neighbors):
                 if free_space[neighbor]:
                     # print("checking..", neighbor)
-                    dist = game_state["bombs"][0][0] - np.array(start)
+                    dist = game_state["bombs"][0][0] - np.array(neighbor)
                     if all(dist != 0) or np.sum(np.abs(dist)) > 3:
                         # print("neighbor is save!", neighbor)
                         save[i] = 1
@@ -212,7 +215,7 @@ def state_to_features(game_state: dict) -> np.array:
                     dist_so_far = {neighbor: 1}
                     while len(frontier) > 0:
                         current = frontier.pop(0)
-                        if dist_so_far[current] > game_state["bombs"][0][1]:
+                        if dist_so_far[current] > game_state["bombs"][0][1] + 1:
                             # print("too far: stopping here", current)
                             continue
                         x, y = current
@@ -280,7 +283,10 @@ def state_to_features(game_state: dict) -> np.array:
                     parent_dict[neighbor] = current
                     dist_so_far[neighbor] = dist_so_far[current] + 1
 
-        found_ind = np.argmin(np.array(found_targets, dtype=object)[:, 2], axis=0)
+        try:
+            found_ind = np.argmin(np.array(found_targets, dtype=object)[:, 2], axis=0)
+        except:
+            found_ind = 0
         found = found_targets[found_ind]
         POI_position = found[0]
         POI_type = found[1]
@@ -333,12 +339,18 @@ def rotate(index_vector):
     """
     Rotates the state vector 90 degrees clockwise.
     """
+    # # print(
+    #     "_________________________________________________________________________________"
+    # )
+    # # print("Rotate was called with index_vector: ", index_vector)
+    # visualize(index_vector)
+
     if index_vector[-1] <= 3:  # DIRECTIONAL ACTION -> add 1
         action_index = (index_vector[-1] + 1) % 4
     else:
         action_index = index_vector[-1]  # BOMB and WAIT invariant
 
-    return (
+    rot = (
         index_vector[3],  # save tiles
         index_vector[0],
         index_vector[1],
@@ -362,11 +374,25 @@ def rotate(index_vector):
         action_index,
     )
 
+    # # print("The resulting rotated vector is: ", rot)
+    # visualize(rot)
+    #
+    # # print(
+    #     "================================================================================="
+    # )
+    return rot
+
 
 def flip(index_vector):
     """
     Flips the state vector left to right.
     """
+
+    # # print(
+    #     "_________________________________________________________________________________"
+    # )
+    # # print("FlipLR was called with index_vector: ", index_vector)
+    # visualize(index_vector)
 
     if index_vector[-1] == 1:  # LEFT RIGHT-> switch
         action_index = 3
@@ -375,7 +401,7 @@ def flip(index_vector):
     else:
         action_index = index_vector[-1]  # UP, DOWN, BOMB and WAIT invariant
 
-    return (
+    flip = (
         index_vector[0],  # save tiles
         index_vector[3],
         index_vector[2],
@@ -401,3 +427,34 @@ def flip(index_vector):
         # index_vector[1 + 3],
         action_index,
     )
+
+    # # print("The resulting flipped vector is: ", flip)
+    # visualize(flip)
+    #
+    # # print(
+    #     "================================================================================="
+    # )
+
+    return flip
+
+
+def visualize(index_vector):
+    # x heißt nicht safe, o heißt safe
+    safe_chars = ["x" if (index_vector[i] == 0) else "o" for i in range(4)]
+    s = ""
+    # l heißt left, r right, u up, d down
+    if index_vector[4] == 0:
+        s += "l"
+    if index_vector[4] == 2:
+        s += "r"
+    if index_vector[5] == 0:
+        s += "u"
+    if index_vector[5] == 2:
+        s += "d"
+    # ? für die felder die nicht gecheckt werden
+    # print("This visualizes to")
+    # print("? ", safe_chars[0], "  ?")
+    # print(safe_chars[3], " ", s, " ", safe_chars[1])
+    # print("? ", safe_chars[2], "  ?")
+
+    # print("With action ", ACTIONS[index_vector[8]])

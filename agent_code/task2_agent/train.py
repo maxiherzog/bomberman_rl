@@ -25,22 +25,23 @@ Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"
 EVADED_BOMB = "EVADED_BOMB"
 NO_CRATE_DESTROYED = "NO_CRATE_DESTROYED"
 NO_BOMB = "NO_BOMB"
-
+BLOCKED_SELF_IN_UNSAFE_SPACE = "BLOCKED_SELF_IN_UNSAFE_SPACE"
 
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-ALPHA = 0.2
+ALPHA = 0.01
 GAMMA = 0.9
 GAME_REWARDS = {
     e.COIN_COLLECTED: 2,
     # e.KILLED_OPPONENT: 5,
     e.INVALID_ACTION: -1,
     e.CRATE_DESTROYED: 1,
-    e.KILLED_SELF: -2,
-    # e.BOMB_DROPPED: 0.5,
-    # EVADED_BOMB: 1,
-    NO_BOMB: -0.05,
+    # e.KILLED_SELF: -2,
+    e.BOMB_DROPPED: 0.05,
+    EVADED_BOMB: 0.25,
+    NO_BOMB: -0.1,
+    BLOCKED_SELF_IN_UNSAFE_SPACE: -2,
     NO_CRATE_DESTROYED: -0.5,
 }
 
@@ -79,10 +80,48 @@ def setup_training(self):
         self.logger.debug(f"Initializing Q")
         self.Q = np.zeros([2, 2, 2, 2, 3, 3, 3, 5, len(ACTIONS)])
 
-        self.Q[0, :, :, :, :, :, :, :, 0] = -1
-        self.Q[:, 0, :, :, :, :, :, :, 1] = -1
-        self.Q[:, :, 0, :, :, :, :, :, 2] = -1
-        self.Q[:, :, :, 0, :, :, :, :, 3] = -1
+        # dont run into walls
+        self.Q[0, :, :, :, :, :, :, :, 0] += -2
+        self.Q[:, 0, :, :, :, :, :, :, 1] += -2
+        self.Q[:, :, 0, :, :, :, :, :, 2] += -2
+        self.Q[:, :, :, 0, :, :, :, :, 3] += -2
+
+        # drop Bomb when near crate
+        self.Q[:, :, :, :, :, :, 1, 1, 5] += 1
+        # dont drop Bomb when already having one bomb
+        self.Q[:, :, :, :, :, :, 0, :, 5] += -2
+
+        # dont drop bomb when not near crate
+        self.Q[:, :, :, :, :, :, 1, 2:, 5] += -2
+
+        # walk towards crates
+        self.Q[1, :, :, :, :, 0, 1, 2:, 0] += 1
+        self.Q[:, 1, :, :, 2, :, 1, 2:, 1] += 1
+        self.Q[:, :, 1, :, :, 2, 1, 2:, 2] += 1
+        self.Q[:, :, :, 1, 2, :, 1, 2:, 3] += 1
+
+        # walk towards coins
+        self.Q[1, :, :, :, :, 0, 2, :, 0] += 1
+        self.Q[:, 1, :, :, 2, :, 2, :, 1] += 1
+        self.Q[:, :, 1, :, :, 2, 2, :, 2] += 1
+        self.Q[:, :, :, 1, 2, :, 2, :, 3] += 1
+
+        # walk away from bomb (only if safe) if ON BOMB
+        self.Q[1, :, :, :, :, :, 0, 0, 0] += 1
+        self.Q[:, 1, :, :, :, :, 0, 0, 1] += 1
+        self.Q[:, :, 1, :, :, :, 0, 0, 2] += 1
+        self.Q[:, :, :, 1, :, :, 0, 0, 3] += 1
+
+        # and in streight lines
+        self.Q[:, :, 1, :, 1, 0, 0, 1:, 2] += 1
+        self.Q[:, :, :, 1, 2, 1, 0, 1:, 3] += 1
+        self.Q[1, :, :, :, 1, 2, 0, 1:, 0] += 1
+        self.Q[:, 1, :, :, 0, 1, 0, 1:, 1] += 1
+
+        # and dont fucking WAIT
+        self.Q[:, :, :, :, :, :, 0, :, 4] += -1
+        # but consider waiting if safe/dead
+        self.Q[0, 0, 0, 0, :, :, 0, :, 4] += 1
 
         # init measured variables
         self.Q_dists = []
@@ -151,12 +190,19 @@ def game_events_occurred(
     if e.COIN_COLLECTED in events:
         self.coin_counter += 1
 
+    new_feat = state_to_features(new_game_state)
+    # BLOCKED_SELF_IN_UNSAFE_SPACE
+    if new_game_state["bombs"] != []:
+        dist = new_game_state["bombs"][0][0] - np.array(new_game_state["self"][3])
+        if all(new_feat[:4] == 0) and not (all(dist != 0) or np.sum(np.abs(dist)) > 3):
+            events.append(BLOCKED_SELF_IN_UNSAFE_SPACE)
+
     # state_to_features is defined in callbacks.py
     self.transitions.append(
         Transition(
             state_to_features(old_game_state),
             self_action,
-            state_to_features(new_game_state),
+            new_feat,
             reward_from_events(self, events),
         )
     )
