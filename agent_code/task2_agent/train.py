@@ -1,9 +1,7 @@
 import pickle
-import random
 from collections import namedtuple, deque
 from typing import List
 import os
-import scipy.sparse as sp
 
 import json
 
@@ -17,7 +15,6 @@ import numpy as np
 from .sparseTensor import SparseTensor
 
 
-import time
 
 
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
@@ -34,20 +31,20 @@ NEW_PLACE = "NEW_PLACE"
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 ALPHA = 0.2
 GAMMA = 0.9
-N = 4           # for n-step TD Q learning
-XP_BUFFER_SIZE = 2
+N = 2           # for n-step TD Q learning
+XP_BUFFER_SIZE = 4
 
 GAME_REWARDS = {
     e.COIN_COLLECTED: 1,
     # e.KILLED_OPPONENT: 5,
     e.INVALID_ACTION: -0.2,
     e.CRATE_DESTROYED: 0.5,
-    e.KILLED_SELF: -1,
+    e.KILLED_SELF: -0.3,
     e.WAITED: -0.2,
     NEW_PLACE: 0.1,
-    # e.BOMB_DROPPED: 0.5,
+    #e.BOMB_DROPPED: 0.2,
     # EVADED_BOMB: 1,
-    #NO_BOMB: -0.05,
+    NO_BOMB: -0.05,
     #NO_CRATE_DESTROYED: -0.5,
 }
 
@@ -160,8 +157,9 @@ def game_events_occurred(
 
     if e.MOVED_UP or e.MOVED_DOWN or e.MOVED_LEFT or e.MOVED_RIGHT:
         if new_game_state["self"][0] not in self.visited:
-            self.visited.append(new_game_state["self"][0])
+            self.visited.append(new_game_state["self"][3])
             events.append(NEW_PLACE)
+            self.logger.info("New Place!"+str( len(self.visited)))
 
     # state_to_features is defined in callbacks.py
     self.transitions.append(
