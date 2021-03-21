@@ -1,0 +1,20 @@
+30000 iterations
+
+
+
+
+
+
+
+At an early stage, we can directly observe said \textit{auxiliary reward abuse}. For example going for a somewhat minimal approach proved to be unsatisfactory. Rewarding only destroyed crates and collected coins while punishing invalid actions and killing itself was thought to be a good initial idea, because it would give some auxiliary rewards, but only for events with undoubted value in any game regardless of specific situation.
+However, being punished repeatedly for trying to move or placing bombs, the agent soon learned to do nothing and just wait.
+We tried two things:
+Punishing waiting lead to an agent tending to walk back and forth unproductively. This is a more sophisticated waiting agent and fundamentally suffers from the same flaw.
+The next trial was to reward the agent to visit new places. [As I write this I am not sure anymore if this was dumb, Im not sure anymore if this changes anything, u got an idea?]
+
+This seemed to provide a good enough basis for a longer training session, so set it up to train 30000 rounds and regularly checked in to see what the agent was doing in between.
+
+During the training the agent appeared to have learned a specific move, namely placing a bomb, going around a corner and waiting there. In certain settings this strategy can  very effectively destroy crates. However, oftentimes the agent fails doing this, because it tries to move into a wall where it hoped to find a hiding place. Then the bomb goes of and it dies.
+Overall, it rarely works out, so it should be punished by the learning process and eventually adapt to become more reliable or vanish completely. In this case it the behavior vanished.
+
+Overall, the agents actions appeared to be more diverse as before the rewards had been tweaked (specifically the visit new places reward), but it still showed both the waiting and stepping back and forth
