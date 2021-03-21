@@ -286,6 +286,7 @@ def state_to_features(game_state: dict) -> np.array:
         try:
             found_ind = np.argmin(np.array(found_targets, dtype=object)[:, 2], axis=0)
         except:
+            print("WTF, encountered weird found_targets: " + str(found_targets))
             found_ind = 0
         found = found_targets[found_ind]
         POI_position = found[0]

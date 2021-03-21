@@ -33,16 +33,16 @@ BLOCKED_SELF_IN_UNSAFE_SPACE = "BLOCKED_SELF_IN_UNSAFE_SPACE"
 ALPHA = 0.01
 GAMMA = 0.9
 GAME_REWARDS = {
-    e.COIN_COLLECTED: 2,
+    e.COIN_COLLECTED: 3,
     # e.KILLED_OPPONENT: 5,
     e.INVALID_ACTION: -1,
-    e.CRATE_DESTROYED: 1,
+    e.CRATE_DESTROYED: 2,
     # e.KILLED_SELF: -2,
     e.BOMB_DROPPED: 0.05,
     EVADED_BOMB: 0.25,
-    NO_BOMB: -0.1,
-    BLOCKED_SELF_IN_UNSAFE_SPACE: -2,
-    NO_CRATE_DESTROYED: -0.5,
+    NO_BOMB: -0.01,
+    BLOCKED_SELF_IN_UNSAFE_SPACE: -10,
+    NO_CRATE_DESTROYED: -5,
 }
 
 
@@ -233,7 +233,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     )
 
     # UPDATE Q
-    updateQ()
+    updateQ(self)
 
     # measure total reward
     tot_reward = 0
