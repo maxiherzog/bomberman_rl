@@ -15,41 +15,49 @@ import numpy as np
 from .sparseTensor import SparseTensor
 
 
-
-
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
 
 # Events
 EVADED_BOMB = "EVADED_BOMB"
 NO_CRATE_DESTROYED = "NO_CRATE_DESTROYED"
 NO_BOMB = "NO_BOMB"
+BLOCKED_SELF_IN_UNSAFE_SPACE = "BLOCKED_SELF_IN_UNSAFE_SPACE"
 NEW_PLACE = "NEW_PLACE"
 
 
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-ALPHA = 0.2
+ALPHA = 0.01
 GAMMA = 0.9
-N = 2           # for n-step TD Q learning
+N = 2  # for n-step TD Q learning
 XP_BUFFER_SIZE = 4
 
 GAME_REWARDS = {
     e.COIN_COLLECTED: 1,
     # e.KILLED_OPPONENT: 5,
-    e.INVALID_ACTION: -0.2,
-    e.CRATE_DESTROYED: 0.5,
-    e.KILLED_SELF: -0.3,
-    e.WAITED: -0.2,
-    NEW_PLACE: 0.1,
-    #e.BOMB_DROPPED: 0.2,
-    # EVADED_BOMB: 1,
-    NO_BOMB: -0.05,
-    #NO_CRATE_DESTROYED: -0.5,
+    e.INVALID_ACTION: -1,
+    e.CRATE_DESTROYED: 1,
+    # e.KILLED_SELF: -2,
+    e.BOMB_DROPPED: 0.05,
+    EVADED_BOMB: 0.25,
+    NO_BOMB: -0.1,
+    BLOCKED_SELF_IN_UNSAFE_SPACE: -2,
+    NO_CRATE_DESTROYED: -0.5,
+    # e.INVALID_ACTION: -0.2,
+    # e.CRATE_DESTROYED: 0.5,
+    # e.KILLED_SELF: -0.3,
+    # e.WAITED: -0.2,
+    # NEW_PLACE: 0.1,
+    # #e.BOMB_DROPPED: 0.2,
+    # # EVADED_BOMB: 1,
+    # NO_BOMB: -0.05,
+    # #NO_CRATE_DESTROYED: -0.5,
 }
 
 
 STORE_FREQ = 500
+
 
 def setup_training(self):
     """
@@ -85,7 +93,6 @@ def setup_training(self):
         self.logger.debug(f"Initializing Q")
         self.beta = np.zeros([8, len(ACTIONS)])
 
-
         # init measured variables
         self.beta_dists = []
         self.tot_rewards = []
@@ -110,12 +117,13 @@ def setup_training(self):
     self.coin_counter = 0
     self.visited = []
 
+
 def game_events_occurred(
-        self,
-        old_game_state: dict,
-        self_action: str,
-        new_game_state: dict,
-        events: List[str],
+    self,
+    old_game_state: dict,
+    self_action: str,
+    new_game_state: dict,
+    events: List[str],
 ):
     """
     Called once per step to allow intermediate rewards based on game events.
@@ -155,6 +163,12 @@ def game_events_occurred(
     if e.COIN_COLLECTED in events:
         self.coin_counter += 1
 
+    new_feat = state_to_features(new_game_state)
+    # BLOCKED_SELF_IN_UNSAFE_SPACE
+    if new_game_state["bombs"] != []:
+        dist = new_game_state["bombs"][0][0] - np.array(new_game_state["self"][3])
+        if all(new_feat[:4] == 0) and not (all(dist != 0) or np.sum(np.abs(dist)) > 3):
+            events.append(BLOCKED_SELF_IN_UNSAFE_SPACE)
     if e.MOVED_UP or e.MOVED_DOWN or e.MOVED_LEFT or e.MOVED_RIGHT:
         if new_game_state["self"][0] not in self.visited:
             self.visited.append(new_game_state["self"][3])
@@ -165,7 +179,7 @@ def game_events_occurred(
         Transition(
             state_to_features(old_game_state),
             self_action,
-            state_to_features(new_game_state),
+            new_feat,
             reward_from_events(self, events),
         )
     )
@@ -220,6 +234,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if last_game_state["round"] % STORE_FREQ == 0:
         store(self)
 
+
 def store(self):
     """
     Stores all the files.
@@ -237,9 +252,10 @@ def store(self):
     with open("analysis/coins.pt", "wb") as file:
         pickle.dump(self.coins_collected, file)
 
+
 def updateQ(self):
     batch = []
-    occasion = []               # storing transitions in occasions to reflect their context
+    occasion = []  # storing transitions in occasions to reflect their context
     for t in self.transitions:
         if t.state is not None:
             occasion.append(t)  # TODO: prioritize interesting transitions
@@ -248,12 +264,16 @@ def updateQ(self):
             occasion = []
 
     for occ in batch:
-        for i,t in enumerate(occ):
-            all_feat_action = get_all_rotations(np.concatenate([occ[i].state, [ACTIONS.index(occ[i].action)]]))
+        for i, t in enumerate(occ):
+            all_feat_action = get_all_rotations(
+                np.concatenate([occ[i].state, [ACTIONS.index(occ[i].action)]])
+            )
             for j in range(len(all_feat_action)):
                 # calculate target response Y using n step TD!
-                n = min(len(occ)-i, N)      # calculate next N steps, otherwise just as far as possible
-                r = [GAMMA**k * occ[i+k].reward for k in range(n)]
+                n = min(
+                    len(occ) - i, N
+                )  # calculate next N steps, otherwise just as far as possible
+                r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
                 if t.next_state is not None:
                     Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
                 else:
@@ -261,7 +281,36 @@ def updateQ(self):
                 # optimize Q towards Y
                 state = np.array(all_feat_action[j][:-1])
                 action = all_feat_action[j][-1]
-                self.beta[:, action] += ALPHA/len(self.transitions) * state * (Y - state.T @ self.beta[:, action])       # TODO: think about batch size division
+                self.beta[:, action] += (
+                    ALPHA
+                    / len(self.transitions)
+                    * state
+                    * (Y - state.T @ self.beta[:, action])
+                )  # TODO: think about batch size division
+
+
+def updateQ(self):
+    """
+    Updates the Q function.
+    """
+    for trans in self.transitions:
+        if trans.action != None:
+
+            if trans.next_state is None:
+                V = 0
+            else:
+                V = np.max(
+                    self.Q[tuple(trans.next_state)]
+                )  # TODO: SARSA vs Q-Learning V
+            action_index = ACTIONS.index(trans.action)
+
+            # get all symmetries
+            origin_vec = np.concatenate((trans.state, [action_index]))
+            # encountered_symmetry = False
+            for rot in get_all_rotations(origin_vec):
+                self.Q[tuple(rot)] += ALPHA * (
+                    trans.reward + GAMMA * V - self.Q[tuple(origin_vec)]
+                )
 
 
 def reward_from_events(self, events: List[str]) -> int:

@@ -1,5 +1,5 @@
 {
-    "ALPHA": 0.2,
+    "ALPHA": 0.01,
     "GAMMA": 0.9,
     "EPSILON": 0.2,
     "XP_BUFFER_SIZE": 2,
