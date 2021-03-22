@@ -26,6 +26,7 @@ DROPPED_BOMB_NEXT_TO_CRATE = "DROPPED_BOMB_NEXT_TO_CRATE"
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 ALPHA = 0.02
 GAMMA = 0.9
+EXPLOIT_SYMMETRY = False
 GAME_REWARDS = {
     # HANS
     # e.COIN_COLLECTED: 1,
@@ -43,7 +44,7 @@ GAME_REWARDS = {
     BLOCKED_SELF_IN_UNSAFE_SPACE: -10,
     e.CRATE_DESTROYED: 0.1,
     NO_BOMB: -0.05,
-    e.NO_CRATE_DESTROYED: -3
+    NO_CRATE_DESTROYED: -3
     # PHILIPP
     # e.COIN_COLLECTED: 5,
     # e.INVALID_ACTION: -0.5,
@@ -158,6 +159,7 @@ def setup_training(self):
             "GAMMA": GAMMA,
             "EPSILON": EPSILON,
             "GAME_REWARDS": GAME_REWARDS,
+            "EXPLOIT_SYMMETRY": EXPLOIT_SYMMETRY,
         }
         with open("model/hyperparams.json", "w") as file:
             json.dump(hyperparams, file, ensure_ascii=False, indent=4)
@@ -318,8 +320,13 @@ def updateQ(self):
 
             # get all symmetries
             origin_vec = np.concatenate((trans.state, [action_index]))
-            for rot in get_all_rotations(origin_vec):
-                self.Q[tuple(rot)] += ALPHA * (
+            if EXPLOIT_SYMMETRY:
+                for rot in get_all_rotations(origin_vec):
+                    self.Q[tuple(rot)] += ALPHA * (
+                        trans.reward + GAMMA * V - self.Q[tuple(origin_vec)]
+                    )
+            else:
+                self.Q[tuple(origin_vec)] += ALPHA * (
                     trans.reward + GAMMA * V - self.Q[tuple(origin_vec)]
                 )
 

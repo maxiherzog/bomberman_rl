@@ -16,7 +16,7 @@ mpl.rcParams["axes.prop_cycle"] = cycler(
 )
 
 ############################################
-MODEL = "_MAXI"
+MODEL = ""
 
 
 def moving_average(x, w):
