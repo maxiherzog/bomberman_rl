@@ -5,7 +5,7 @@ import random
 import numpy as np
 
 
-ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT"]#, "BOMB"]
+ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT"]  # , "BOMB"]
 
 
 def setup(self):
@@ -43,7 +43,6 @@ def act(self, game_state: dict) -> str:
 
     feat = state_to_features(game_state)
     self.logger.debug("Querying model for action with feature " + str(feat))
-    # TODO: Exploration vs exploitation
 
     # epsilon greedy
     epsilon = 0.05
@@ -51,15 +50,8 @@ def act(self, game_state: dict) -> str:
         self.logger.debug("Epsilon-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
 
-
     action_index = np.argmax(
-        self.Q[
-            :,
-            int(feat[0] + 14),
-            int(feat[1] + 14),
-            int(feat[2]),
-            int(feat[3])
-        ]
+        self.Q[:, int(feat[0] + 14), int(feat[1] + 14), int(feat[2]), int(feat[3])]
     )
 
     # soft-max
@@ -101,15 +93,15 @@ def state_to_features(game_state: dict) -> np.array:
         closest_vector = [0, 0]  # treat non-existing coins as [0,0]
 
     # check if surrounding tiles are blocked
-    #x_off = [1, -1, 0, 0]
-    #y_off = [0, 0, 1, -1]
-    #blocked = np.zeros(4)
-    #for i in range(len(blocked)):
+    # x_off = [1, -1, 0, 0]
+    # y_off = [0, 0, 1, -1]
+    # blocked = np.zeros(4)
+    # for i in range(len(blocked)):
     #    blocked[i] = game_state["field"][
     #        game_state["self"][3][0] + x_off[i], game_state["self"][3][1] + y_off[i]
     #    ]
 
-    mod_pos = [game_state["self"][3][0]%2, game_state["self"][3][1]%2]
+    mod_pos = [game_state["self"][3][0] % 2, game_state["self"][3][1] % 2]
 
     # channels = []
     # channels.append(...)
