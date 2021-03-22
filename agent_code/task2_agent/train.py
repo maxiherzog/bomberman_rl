@@ -21,6 +21,7 @@ EVADED_BOMB = "EVADED_BOMB"
 NO_CRATE_DESTROYED = "NO_CRATE_DESTROYED"
 NO_BOMB = "NO_BOMB"
 BLOCKED_SELF_IN_UNSAFE_SPACE = "BLOCKED_SELF_IN_UNSAFE_SPACE"
+DROPPED_BOMB_NEXT_TO_CRATE = "DROPPED_BOMB_NEXT_TO_CRATE"
 NEW_PLACE = "NEW_PLACE"
 
 
@@ -32,30 +33,44 @@ GAMMA = 0.9
 N = 2  # for n-step TD Q learning
 XP_BUFFER_SIZE = 10     # higher batch size for forest
 
-GAME_REWARDS = {                    # edit to avoid waiting
+EXPLOIT_SYMMETRY = True
+GAME_REWARDS = {
+    # HANS
     e.COIN_COLLECTED: 1,
-    # e.KILLED_OPPONENT: 5,
-    e.INVALID_ACTION: -0.05,        # used to be -0.1
+    e.INVALID_ACTION: -0.1,
     e.CRATE_DESTROYED: 0.5,
     e.KILLED_SELF: -0.5,
     e.BOMB_DROPPED: 0.05,
     EVADED_BOMB: 0.1,
-    NO_CRATE_DESTROYED: -0.1,
+    NO_CRATE_DESTROYED: -0.3,
     NO_BOMB: -0.05,
-    e.WAITED: -0.05,                # added to avoid wait
-    #BLOCKED_SELF_IN_UNSAFE_SPACE: -0.3,
-    #NO_BOMB: -0.1,
-    #BLOCKED_SELF_IN_UNSAFE_SPACE: -2,
-    #NO_CRATE_DESTROYED: -0.5,
-    # e.INVALID_ACTION: -0.2,
-    # e.CRATE_DESTROYED: 0.5,
-    # e.KILLED_SELF: -0.3,
-    # e.WAITED: -0.2,
-    # NEW_PLACE: 0.1,
-    # #e.BOMB_DROPPED: 0.2,
-    # # EVADED_BOMB: 1,
+    BLOCKED_SELF_IN_UNSAFE_SPACE: -0.3,
+    # MAXI
+    # e.COIN_COLLECTED: 1,
+    # e.INVALID_ACTION: -1,
+    # BLOCKED_SELF_IN_UNSAFE_SPACE: -10,
+    # e.CRATE_DESTROYED: 0.1,
     # NO_BOMB: -0.05,
-    # #NO_CRATE_DESTROYED: -0.5,
+    # NO_CRATE_DESTROYED: -3
+    # PHILIPP
+    # e.COIN_COLLECTED: 5,
+    # e.INVALID_ACTION: -0.5,
+    # e.CRATE_DESTROYED: 3,
+    # e.KILLED_SELF: -4,
+    # e.BOMB_DROPPED: 0.05,
+    # NO_BOMB: -0.02,
+    # DROPPED_BOMB_NEXT_TO_CRATE: 0.4,
+    # TÜFTEL
+    # e.COIN_COLLECTED: 1,
+    # # e.KILLED_OPPONENT: 5,
+    # e.INVALID_ACTION: -1,
+    # e.CRATE_DESTROYED: 0.5,
+    # e.BOMB_DROPPED: 0.05,
+    # EVADED_BOMB: 0.25,
+    # NO_BOMB: -0.01,
+    # BLOCKED_SELF_IN_UNSAFE_SPACE: -5,
+    # e.KILLED_SELF: -2,
+    # NO_CRATE_DESTROYED: -3,
 }
 
 
@@ -75,32 +90,79 @@ def setup_training(self):
     self.transitions = deque(maxlen=None)  #
     self.rounds_played = 0
 
-    # ensure analysis subfolder
-    if not os.path.exists("analysis"):
-        os.makedirs("analysis")
+    # ensure model subfolder
+    if not os.path.exists("model"):
+        os.makedirs("model")
 
-    if os.path.isfile("model.pt"):
+    if os.path.isfile("model/model.pt"):
         self.logger.info("Retraining from saved state.")
-        with open("model.pt", "rb") as file:
-            self.forest = pickle.load(file)
+        with open("model/model.pt", "rb") as file:
+            self.Q = pickle.load(file)
+
         self.logger.info("Reloading analysis variables.")
-        #with open("analysis/beta-dists.pt", "rb") as file:
-        #    self.beta_dists = pickle.load(file)
-        with open("analysis/rewards.pt", "rb") as file:
-            self.tot_rewards = pickle.load(file)
-        with open("analysis/coins.pt", "rb") as file:
-            self.coins_collected = pickle.load(file)
-        with open("analysis/crates.pt", "rb") as file:
-            self.crates_destroyed = pickle.load(file)
+        with open("model/analysis_data.pt", "rb") as file:
+            self.analysis_data = pickle.load(file)
+
     else:
-        #self.logger.debug(f"Initializing Q")
-        #self.forest =  # not needed because initialized in callbacks.py
+        self.logger.debug("Initializing Q")
+        # self.Q = np.zeros([2, 2, 2, 2, 5, 5, 3, 5, len(ACTIONS)])
+        # 
+        # # dont run into walls
+        # self.Q[0, :, :, :, :, :, :, :, 0] += -2
+        # self.Q[:, 0, :, :, :, :, :, :, 1] += -2
+        # self.Q[:, :, 0, :, :, :, :, :, 2] += -2
+        # self.Q[:, :, :, 0, :, :, :, :, 3] += -2
+        # 
+        # # drop Bomb when near crate
+        # self.Q[:, :, :, :, :, :, 1, 1, 5] += 1
+        # # dont drop Bomb when already having one bomb
+        # self.Q[:, :, :, :, :, :, 0, :, 5] += -2
+        # 
+        # # dont drop bomb when not near crate
+        # self.Q[:, :, :, :, :, :, 1, 2:, 5] += -2
+        # 
+        # # walk towards crates
+        # self.Q[1, :, :, :, :, :2, 1, 2:, 0] += 1
+        # self.Q[:, 1, :, :, -2:, :, 1, 2:, 1] += 1
+        # self.Q[:, :, 1, :, :, -2:, 1, 2:, 2] += 1
+        # self.Q[:, :, :, 1, :2, :, 1, 2:, 3] += 1
+        # 
+        # # walk towards coins
+        # self.Q[1, :, :, :, :, :2, 2, :, 0] += 1
+        # self.Q[:, 1, :, :, -2:, :, 2, :, 1] += 1
+        # self.Q[:, :, 1, :, :, -2:, 2, :, 2] += 1
+        # self.Q[:, :, :, 1, :2, :, 2, :, 3] += 1
+        # 
+        # # walk away from bomb (only if safe) if ON BOMB
+        # self.Q[1, :, :, :, :, :, 0, :, 0] += 1
+        # self.Q[:, 1, :, :, :, :, 0, :, 1] += 1
+        # self.Q[:, :, 1, :, :, :, 0, :, 2] += 1
+        # self.Q[:, :, :, 1, :, :, 0, :, 3] += 1
+        # 
+        # # and in straight lines
+        # # self.Q[:, :, 1, :, 1, 0, 0, 1:, 2] += 1
+        # # self.Q[:, :, :, 1, 2, 1, 0, 1:, 3] += 1
+        # # self.Q[1, :, :, :, 1, 2, 0, 1:, 0] += 1
+        # # self.Q[:, 1, :, :, 0, 1, 0, 1:, 1] += 1
+        # 
+        # # and dont fucking WAIT
+        # self.Q[:, :, :, :, :, :, 0, :, 4] += -1
+        # # but consider waiting if safe/dead
+        # self.Q[0, 0, 0, 0, :, :, 0, :, 4] += 1
 
         # init measured variables
-        #self.beta_dists = []
-        self.tot_rewards = []
-        self.coins_collected = []
-        self.crates_destroyed = []
+        self.analysis_data = {
+            "Q_sum": [],
+            # "Q_sum_move": [],
+            # "Q_sum_bomb": [],
+            # "Q_sum_wait": [],
+            # "Q_situation": [self.Q[0, 1, 1, 0, 1, 2, 1, 2, :]],
+            "reward": [],
+            "coins": [],
+            "crates": [],
+            "length": [],
+            "useless_bombs": [],
+        }
 
         # dump hyper parameters as json
         hyperparams = {
@@ -110,15 +172,16 @@ def setup_training(self):
             "XP_BUFFER_SIZE": XP_BUFFER_SIZE,
             "N": N,
             "GAME_REWARDS": GAME_REWARDS,
+            "EXPLOIT_SYMMETRY": EXPLOIT_SYMMETRY,
         }
-        with open("analysis/hyperparams.json", "w") as file:
+        with open("model/hyperparams.json", "w") as file:
             json.dump(hyperparams, file, ensure_ascii=False, indent=4)
 
     # init counters
     # hands on variables
     self.crate_counter = 0
     self.coin_counter = 0
-    self.visited = []
+    self.useless_bombs_counter = 0
 
 
 def game_events_occurred(
@@ -156,6 +219,7 @@ def game_events_occurred(
 
     if e.BOMB_EXPLODED in events and not e.CRATE_DESTROYED in events:
         events.append(NO_CRATE_DESTROYED)
+        self.useless_bombs_counter += 1
 
     if not e.BOMB_DROPPED in events:
         events.append(NO_BOMB)
@@ -166,6 +230,7 @@ def game_events_occurred(
     if e.COIN_COLLECTED in events:
         self.coin_counter += 1
 
+    old_feat = state_to_features(old_game_state)
     new_feat = state_to_features(new_game_state)
     # BLOCKED_SELF_IN_UNSAFE_SPACE
     if new_game_state["bombs"] != []:
@@ -177,14 +242,14 @@ def game_events_occurred(
             self.visited.append(new_game_state["self"][3])
             events.append(NEW_PLACE)
 
+    # DROPPED_BOMB_NEXT_TO_CRATE
+    if e.BOMB_DROPPED in events:
+        if old_feat[6] == 1 and old_feat[7] == 1:
+            events.append(DROPPED_BOMB_NEXT_TO_CRATE)
+
     # state_to_features is defined in callbacks.py
     self.transitions.append(
-        Transition(
-            state_to_features(old_game_state),
-            self_action,
-            new_feat,
-            reward_from_events(self, events),
-        )
+        Transition(old_feat, self_action, new_feat, reward_from_events(self, events))
     )
 
 
@@ -212,21 +277,25 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             reward_from_events(self, events),
         )
     )
-
+    
+    # measure
     tot_reward = 0
     for trans in self.transitions:
-        if trans.action != None:
+        if trans.action is not None:
             tot_reward += trans.reward
-    self.tot_rewards.append(tot_reward)
-    #self.beta_dists.append(np.sum(self.beta))
 
-    self.crates_destroyed.append(self.crate_counter)
+    self.analysis_data["reward"].append(tot_reward)
+    self.analysis_data["Q_sum"].append(np.sum(self.Q))
+    
+    # RESET Counters
     self.crate_counter = 0
-
-    self.coins_collected.append(self.coin_counter)
     self.coin_counter = 0
-
-    self.visited = []
+    self.useless_bombs_counter = 0
+    
+    self.analysis_data["crates"].append(self.crate_counter)
+    self.analysis_data["coins"].append(self.coin_counter)
+    self.analysis_data["length"].append(last_game_state["step"])
+    self.analysis_data["useless_bombs"].append(self.useless_bombs_counter)
 
     self.rounds_played += 1
     if self.rounds_played % XP_BUFFER_SIZE == 0:
@@ -244,16 +313,10 @@ def store(self):
     """
     # Store the model
     self.logger.debug("Storing model.")
-    with open(r"model.pt", "wb") as file:
-        pickle.dump(self.forest, file)
-    with open("analysis/rewards.pt", "wb") as file:
-        pickle.dump(self.tot_rewards, file)
-    #with open("analysis/beta-dists.pt", "wb") as file:
-    #    pickle.dump(self.beta_dists, file)
-    with open("analysis/crates.pt", "wb") as file:
-        pickle.dump(self.crates_destroyed, file)
-    with open("analysis/coins.pt", "wb") as file:
-        pickle.dump(self.coins_collected, file)
+    with open(r"model/model.pt", "wb") as file:
+        pickle.dump(self.Q, file)
+    with open("model/analysis_data.pt", "wb") as file:
+        pickle.dump(self.analysis_data, file)
 
 
 def updateQ(self):
@@ -278,6 +341,7 @@ def updateQ(self):
                     len(occ) - i, N
                 )  # calculate next N steps, otherwise just as far as possible
                 r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
+                # TODO: Different Y models
                 if t.next_state is not None:
                     Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
                 else:
@@ -287,7 +351,6 @@ def updateQ(self):
     xas = np.array(xas)
     ys = np.array(ys)
     self.forest.fit(xas, ys)
-
 
 
 def reward_from_events(self, events: List[str]) -> int:

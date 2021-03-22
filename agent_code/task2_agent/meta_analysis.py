@@ -1,27 +1,58 @@
 import pickle
 import numpy as np
+import os
+
+############################################
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+from cycler import cycler
+
+mpl.rcParams["figure.dpi"] = 300
+mpl.rcParams["mathtext.fontset"] = "stix"
+mpl.rcParams["font.family"] = "STIXGeneral"
+
+mpl.rcParams["axes.prop_cycle"] = cycler(
+    "color", ["green", "tomato", "navy", "orchid", "yellowgreen", "goldenrod"]
+)
+
+############################################
 
 # compare distribution of in the following files
-filenames = ["rewards"]
-
+# filenames = ["rewards"]
 
 dists = []
-names = ["blubblub"]
-for name in filenames:
-    with open("analysis/"+name+".pt", "rb") as file:
-        distribution = pickle.load(file)
+MODELS = ["HANS", "HANS_SYM", "PHILIPP", "MAXI"]
+s = ""
+labels = []
+for name in MODELS:
+    # ensure model subfolder
+    if os.path.exists(f"model_{name}"):
+        if os.path.isfile(f"model_{name}/test_results.pt"):
+            with open(f"model_{name}/test_results.pt", "rb") as file:
+                s += name + "_"
+                results = pickle.load(file)
+                dist = (
+                    np.array(results["total_crates"]) - np.array(results["crates"])
+                ) / np.array(results["total_crates"])
+                dists.append(dist)
+                winrate = np.count_nonzero(dist == 1) / len(dist)
+                labels.append(f"{name}, wr: {round(winrate*100,1)}%")
+                # names.append(name)
+                print(">%s %.3f (%.3f)" % (name, np.mean(dist), np.std(dist)))
+        else:
+            print(f"FOUND NO MODEL NAMED {name}")
+    else:
+        print(f"FOUND NO MODEL NAMED {name}")
+# plt.style.use('seaborn-whitegrid')
+plt.grid(axis="y")
+medianprops = dict(linestyle="-", linewidth=2.5, color="firebrick")
+plt.boxplot(dists, labels=labels, showmeans=True, medianprops=medianprops)
+plt.xlabel("Model")
+plt.ylabel("Crate Destroyed Percentage")
+plt.title("Crate Destroyed Percentage Distributions for Different Reward Models")
 
-        dists.append(distribution)
-        #names.append(name)
-        print('>%s %.3f (%.3f)' % (name, np.mean(distribution), np.std(distribution)))
-
-#plt.style.use('seaborn-whitegrid')
-plt.grid(axis='y')
-medianprops = dict(linestyle='-', linewidth=2.5, color='firebrick')
-plt.boxplot(dists, labels=names, showmeans=True, medianprops=medianprops)
-plt.xlabel("Hyperparameter X")
-plt.ylabel("reward")
-plt.title("rewards distributions for different hyperparameters")
-plt.savefig("analysis/rewards_comparison.pdf")
+# ensure meta/plots subfolder
+if not os.path.exists("meta/plots"):
+    os.makedirs("meta/plots")
+plt.savefig(f"meta/plots/{s}crate_percentage_boxplot.pdf")
 plt.show()
