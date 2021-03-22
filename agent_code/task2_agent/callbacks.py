@@ -38,7 +38,7 @@ def setup(self):
     if self.train or not os.path.isfile(f"model{self.model_suffix}/model.pt"):
         self.logger.info("Setting up model from scratch.")
         self.forest = RandomForestRegressor(n_estimators=10, max_depth=5, random_state=0)
-        xas = [np.zeros(50)] # gamestate and action as argument
+        xas = [np.zeros(8)] # gamestate and action as argument
         ys = [0]            # target response
         self.forest.fit(xas, ys)
 
@@ -438,9 +438,9 @@ def rotate(index_vector):
         index_vector[7],  # POI distance invariant
         action_index,
     )
-    if visual_feedback:
-        visualize(rot, action_index)
-        print("=================================================================================")
+    # if visual_feedback:
+    #     visualize(rot, action_index)
+    #     print("=================================================================================")
 
     return rot
 
