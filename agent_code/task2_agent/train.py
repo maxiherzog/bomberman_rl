@@ -1,9 +1,7 @@
 import pickle
-import random
 from collections import namedtuple, deque
 from typing import List
 import os
-import scipy.sparse as sp
 
 import json
 
@@ -13,10 +11,6 @@ from .callbacks import ACTIONS
 from .callbacks import get_all_rotations
 from .callbacks import EPSILON
 import numpy as np
-from .sparseTensor import SparseTensor
-
-
-import time
 
 
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
@@ -26,23 +20,49 @@ EVADED_BOMB = "EVADED_BOMB"
 NO_CRATE_DESTROYED = "NO_CRATE_DESTROYED"
 NO_BOMB = "NO_BOMB"
 BLOCKED_SELF_IN_UNSAFE_SPACE = "BLOCKED_SELF_IN_UNSAFE_SPACE"
-
+DROPPED_BOMB_NEXT_TO_CRATE = "DROPPED_BOMB_NEXT_TO_CRATE"
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-ALPHA = 0.01
-GAMMA = 0.93
+ALPHA = 0.02
+GAMMA = 0.9
 GAME_REWARDS = {
+    # HANS
+    # e.COIN_COLLECTED: 1,
+    # e.INVALID_ACTION: -0.1,
+    # e.CRATE_DESTROYED: 0.5,
+    # e.KILLED_SELF: -0.5,
+    # e.BOMB_DROPPED: 0.05,
+    # EVADED_BOMB: 0.1,
+    # NO_CRATE_DESTROYED: -0.1,
+    # NO_BOMB: -0.05,
+    # BLOCKED_SELF_IN_UNSAFE_SPACE: -0.3,
+    # MAXI
     e.COIN_COLLECTED: 1,
-    # e.KILLED_OPPONENT: 5,
     e.INVALID_ACTION: -1,
-    e.CRATE_DESTROYED: 0.5,
-    e.BOMB_DROPPED: 0.05,
-    EVADED_BOMB: 0.25,
-    NO_BOMB: -0.01,
-    BLOCKED_SELF_IN_UNSAFE_SPACE: -5,
-    e.KILLED_SELF: -2,
-    NO_CRATE_DESTROYED: -3,
+    BLOCKED_SELF_IN_UNSAFE_SPACE: -10,
+    e.CRATE_DESTROYED: 0.1,
+    NO_BOMB: -0.05,
+    e.NO_CRATE_DESTROYED: -3
+    # PHILIPP
+    # e.COIN_COLLECTED: 5,
+    # e.INVALID_ACTION: -0.5,
+    # e.CRATE_DESTROYED: 3,
+    # e.KILLED_SELF: -4,
+    # e.BOMB_DROPPED: 0.05,
+    # NO_BOMB: -0.02,
+    # DROPPED_BOMB_NEXT_TO_CRATE: 0.4,
+    # TÜFTEL
+    # e.COIN_COLLECTED: 1,
+    # # e.KILLED_OPPONENT: 5,
+    # e.INVALID_ACTION: -1,
+    # e.CRATE_DESTROYED: 0.5,
+    # e.BOMB_DROPPED: 0.05,
+    # EVADED_BOMB: 0.25,
+    # NO_BOMB: -0.01,
+    # BLOCKED_SELF_IN_UNSAFE_SPACE: -5,
+    # e.KILLED_SELF: -2,
+    # NO_CRATE_DESTROYED: -3,
 }
 
 
@@ -72,8 +92,8 @@ def setup_training(self):
             self.analysis_data = pickle.load(file)
 
     else:
-        self.logger.debug(f"Initializing Q")
-        self.Q = np.zeros([2, 2, 2, 2, 3, 3, 3, 5, len(ACTIONS)])
+        self.logger.debug("Initializing Q")
+        self.Q = np.zeros([2, 2, 2, 2, 5, 5, 3, 5, len(ACTIONS)])
 
         # dont run into walls
         self.Q[0, :, :, :, :, :, :, :, 0] += -2
@@ -90,16 +110,16 @@ def setup_training(self):
         self.Q[:, :, :, :, :, :, 1, 2:, 5] += -2
 
         # walk towards crates
-        self.Q[1, :, :, :, :, 0, 1, 2:, 0] += 1
-        self.Q[:, 1, :, :, 2, :, 1, 2:, 1] += 1
-        self.Q[:, :, 1, :, :, 2, 1, 2:, 2] += 1
-        self.Q[:, :, :, 1, 2, :, 1, 2:, 3] += 1
+        self.Q[1, :, :, :, :, :2, 1, 2:, 0] += 1
+        self.Q[:, 1, :, :, -2:, :, 1, 2:, 1] += 1
+        self.Q[:, :, 1, :, :, -2:, 1, 2:, 2] += 1
+        self.Q[:, :, :, 1, :2, :, 1, 2:, 3] += 1
 
         # walk towards coins
-        self.Q[1, :, :, :, :, 0, 2, :, 0] += 1
-        self.Q[:, 1, :, :, 2, :, 2, :, 1] += 1
-        self.Q[:, :, 1, :, :, 2, 2, :, 2] += 1
-        self.Q[:, :, :, 1, 2, :, 2, :, 3] += 1
+        self.Q[1, :, :, :, :, :2, 2, :, 0] += 1
+        self.Q[:, 1, :, :, -2:, :, 2, :, 1] += 1
+        self.Q[:, :, 1, :, :, -2:, 2, :, 2] += 1
+        self.Q[:, :, :, 1, :2, :, 2, :, 3] += 1
 
         # walk away from bomb (only if safe) if ON BOMB
         self.Q[1, :, :, :, :, :, 0, :, 0] += 1
@@ -121,6 +141,10 @@ def setup_training(self):
         # init measured variables
         self.analysis_data = {
             "Q_sum": [],
+            # "Q_sum_move": [],
+            # "Q_sum_bomb": [],
+            # "Q_sum_wait": [],
+            # "Q_situation": [self.Q[0, 1, 1, 0, 1, 2, 1, 2, :]],
             "reward": [],
             "coins": [],
             "crates": [],
@@ -191,6 +215,7 @@ def game_events_occurred(
     if e.COIN_COLLECTED in events:
         self.coin_counter += 1
 
+    old_feat = state_to_features(old_game_state)
     new_feat = state_to_features(new_game_state)
     # BLOCKED_SELF_IN_UNSAFE_SPACE
     if new_game_state["bombs"] != []:
@@ -198,14 +223,14 @@ def game_events_occurred(
         if all(new_feat[:4] == 0) and not (all(dist != 0) or np.sum(np.abs(dist)) > 3):
             events.append(BLOCKED_SELF_IN_UNSAFE_SPACE)
 
+    # DROPPED_BOMB_NEXT_TO_CRATE
+    if e.BOMB_DROPPED in events:
+        if old_feat[6] == 1 and old_feat[7] == 1:
+            events.append(DROPPED_BOMB_NEXT_TO_CRATE)
+
     # state_to_features is defined in callbacks.py
     self.transitions.append(
-        Transition(
-            state_to_features(old_game_state),
-            self_action,
-            new_feat,
-            reward_from_events(self, events),
-        )
+        Transition(old_feat, self_action, new_feat, reward_from_events(self, events),)
     )
 
 
@@ -244,12 +269,17 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     self.analysis_data["reward"].append(tot_reward)
     self.analysis_data["Q_sum"].append(np.sum(self.Q))
+    # self.analysis_data["Q_sum_move"].append(np.sum(self.Q[:, :, :, :, :, :, :, :, 0]))
+    # self.analysis_data["Q_sum_bomb"].append(np.sum(self.Q[:, :, :, :, :, :, :, :, 5]))
+    # self.analysis_data["Q_sum_wait"].append(np.sum(self.Q[:, :, :, :, :, :, :, :, 4]))
+    # self.analysis_data["Q_situation"].append(self.Q[0, 1, 1, 0, 1, 2, 1, 2, :])
+    # print(self.Q[0, 1, 1, 0, 1, 2, 1, 2, :])
     self.analysis_data["crates"].append(self.crate_counter)
     self.analysis_data["coins"].append(self.coin_counter)
     self.analysis_data["length"].append(last_game_state["step"])
     self.analysis_data["useless_bombs"].append(self.useless_bombs_counter)
 
-    if last_game_state["round"] % 500 == 0:
+    if last_game_state["round"] % 100 == 0:
         store(self)
     # clear transitions -> ready for next game
     self.transitions = deque(maxlen=None)
@@ -288,7 +318,6 @@ def updateQ(self):
 
             # get all symmetries
             origin_vec = np.concatenate((trans.state, [action_index]))
-            # encountered_symmetry = False
             for rot in get_all_rotations(origin_vec):
                 self.Q[tuple(rot)] += ALPHA * (
                     trans.reward + GAMMA * V - self.Q[tuple(origin_vec)]

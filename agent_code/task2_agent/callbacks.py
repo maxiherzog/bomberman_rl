@@ -1,7 +1,6 @@
 import os
 import pickle
 import random
-import time
 import numpy as np
 from random import shuffle
 
@@ -23,12 +22,23 @@ def setup(self):
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    if self.train or not os.path.isfile("model/model.pt"):
+
+    ### CHANGE ONLY IF YOU KNOW WHAT YOU ARE DOING, no sync with training!
+    self.model_suffix = ""
+
+    # TEST BENCH CODE
+    if "TESTING" in os.environ:
+        if os.environ["TESTING"] == "YES":
+            self.test_results = {"crates": [], "total_crates": []}
+            self.model_suffix = "_" + os.environ["MODELNAME"]
+            self.total_crates = 0
+            self.last_crates = 0
+    if self.train or not os.path.isfile(f"model{self.model_suffix}/model.pt"):
         self.logger.info("Setting up model from scratch.")
 
     else:
         self.logger.info("Loading model.")
-        with open("model/model.pt", "rb") as file:
+        with open(f"model{self.model_suffix}/model.pt", "rb") as file:
             self.Q = pickle.load(file)
 
 
@@ -42,38 +52,41 @@ def act(self, game_state: dict) -> str:
     :return: The action to take as a string.
     """
     # print("-----------------")
+
     feat = state_to_features(game_state)
     self.logger.debug(
         "Querying model for action with feature " + str(tuple(feat)) + "."
     )
-    # TODO: Exploration vs exploitation
 
-    # EPSILON greedy
+    # TEST BENCH CODE
+    if "TESTING" in os.environ:
+        if os.environ["TESTING"] == "YES":
+            crates = np.count_nonzero(game_state["field"] == 1)
+            if self.total_crates == 0 or self.last_crates < crates:
+                self.total_crates = crates
+                self.test_results["total_crates"].append(crates)
+                self.test_results["crates"].append(crates)
+            elif self.last_crates > crates:
+                self.test_results["crates"][-1] = crates
+            self.last_crates = crates
+
+            with open(f"model{self.model_suffix}/test_results.pt", "wb") as file:
+                pickle.dump(self.test_results, file)
+
+    # TODO: Exploration vs exploitation
+    # ->EPSILON greedy
 
     if self.train and random.random() < EPSILON:
         self.logger.debug("EPSILON-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
 
-    # start = time.time()
-    # get all symmetries
-    # Qs = []
-    # for act in range(len(ACTIONS)):
-    #     origin_vec = np.concatenate((feat, [act]))
-    #     # encountered_symmetry = False
-    #     for rot in get_all_rotations(origin_vec):
-    #         if self.Q.already_exists(rot):
-    #             # encountered_symmetry = True
-    #             Qs.append(self.Q.get_entry(rot))
-    #             break
-    #     else:  # if not encountered symmetry
-    #         Qs.append(0)
     Qs = self.Q[tuple(feat)]
     self.logger.debug("Qs for this situation: " + str(Qs))
 
     action_index = np.random.choice(np.flatnonzero(Qs == np.max(Qs)))
     # self.logger.debug("Choosing an action took " + str((time.time() - start)) + "ms.")
 
-    # soft-max
+    # -> soft-max
 
     # ROUNDS = 100000
     # rho = np.clip((1 - game_state["round"]/ROUNDS)*0.7, a_min=1e-3, a_max=0.5) # starte sehr kalt, wegen gutem anfangsQ
@@ -174,7 +187,9 @@ def state_to_features(game_state: dict) -> np.array:
         # TODO: schlechter fix for now, immer nur eine Bombe(die eigene) in Task 2
         # deswegen:
         dist = game_state["bombs"][0][0] - np.array(game_state["self"][3])
+        bigger = np.argmax(np.abs(dist))
         POI_vector = np.sign(dist) + 1
+        POI_vector[bigger] *= 2
         POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
         POI_type = 0
 
@@ -252,7 +267,6 @@ def state_to_features(game_state: dict) -> np.array:
         parent_dict = {start: start}
         dist_so_far = {start: 0}
         found_targets = []  # list of tuples (*coord, type)
-        best = start
 
         free_space = game_state["field"] == 0
 
@@ -283,17 +297,28 @@ def state_to_features(game_state: dict) -> np.array:
                     parent_dict[neighbor] = current
                     dist_so_far[neighbor] = dist_so_far[current] + 1
 
-        try:
-            found_ind = np.argmin(np.array(found_targets, dtype=object)[:, 2], axis=0)
-        except:
-            print("WTF, encountered weird found_targets: " + str(found_targets))
-            found_ind = 0
-        found = found_targets[found_ind]
-        POI_position = found[0]
-        POI_type = found[1]
-        dist = POI_position - np.array(game_state["self"][3])
-        POI_vector = np.sign(dist) + 1
-        POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
+        # print(found_targets)
+        if len(found_targets) == 0:
+            POI_vector = [2, 2]
+            POI_type = 1
+            POI_dist = 0
+        else:
+            found = sorted(found_targets, key=lambda tar: tar[2])[0]
+            # print(found)
+            # try:
+            #     found_ind = np.argmin(np.array(found_targets, dtype=object)[:, 2], axis=0)
+            # except:
+            #     print("WTF, encountered weird found_targets: " + str(found_targets))
+            #     found_ind = 0
+            # found = found_targets[found_ind]
+            # FIXME: Hier Bug? Indexoutofrange -> numpy?
+            POI_position = found[0]
+            POI_type = found[1]
+            dist = POI_position - np.array(game_state["self"][3])
+            bigger = np.argmax(np.abs(dist))
+            POI_vector = np.sign(dist) + 2
+            POI_vector[bigger] = (POI_vector[bigger] - 2) * 2 + 2
+            POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
 
         # ALSO compute save directions
         save = np.zeros(len(x_off))
@@ -441,7 +466,7 @@ def flip(index_vector):
 
 def visualize(index_vector):
     # x heißt nicht safe, o heißt safe
-    safe_chars = ["x" if (index_vector[i] == 0) else "o" for i in range(4)]
+    # safe_chars = ["x" if (index_vector[i] == 0) else "o" for i in range(4)]
     s = ""
     # l heißt left, r right, u up, d down
     if index_vector[4] == 0:
