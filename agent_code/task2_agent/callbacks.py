@@ -189,7 +189,7 @@ def state_to_features(game_state: dict) -> np.array:
         dist = game_state["bombs"][0][0] - np.array(game_state["self"][3])
         bigger = np.argmax(np.abs(dist))
         POI_vector = np.sign(dist) + 1
-        POI_vector[bigger] *= 2
+        POI_vector[bigger] = (POI_vector[bigger] - 2) * 2 + 2
         POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
         POI_type = 0
 
@@ -316,7 +316,6 @@ def state_to_features(game_state: dict) -> np.array:
             POI_type = found[1]
             dist = POI_position - np.array(game_state["self"][3])
             bigger = np.argmax(np.abs(dist))
-            POI_vector = np.sign(dist) + 2
             POI_vector[bigger] = (POI_vector[bigger] - 2) * 2 + 2
             POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
 
