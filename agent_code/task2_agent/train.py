@@ -78,7 +78,7 @@ def setup_training(self):
     # (s, a, r, s')
     self.transitions = deque(maxlen=None)  #
 
-    # ensure analysis subfolder
+    # ensure model subfolder
     if not os.path.exists("model"):
         os.makedirs("model")
 

@@ -12,7 +12,7 @@ ROUNDS = 1000
 # os.system(f'python main.py play --agents task2_agent --no-gui --n-rounds {ROUNDS}')
 import sys
 
-MODELS = ["HANS_SYM", "PHILIPP", "MAXI"]
+MODELS = ["HANS"]  # ,"HANS_SYM", "PHILIPP"]
 
 
 sys.argv = [
