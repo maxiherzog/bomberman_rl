@@ -28,22 +28,26 @@ NEW_PLACE = "NEW_PLACE"
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-ALPHA = 0.01
+ALPHA = 0.02
 GAMMA = 0.9
 N = 2  # for n-step TD Q learning
 XP_BUFFER_SIZE = 10     # higher batch size for forest
 
-GAME_REWARDS = {
+GAME_REWARDS = {                    # edit to avoid waiting
     e.COIN_COLLECTED: 1,
     # e.KILLED_OPPONENT: 5,
-    e.INVALID_ACTION: -1,
-    e.CRATE_DESTROYED: 1,
-    # e.KILLED_SELF: -2,
+    e.INVALID_ACTION: -0.05,        # used to be -0.1
+    e.CRATE_DESTROYED: 0.5,
+    e.KILLED_SELF: -0.5,
     e.BOMB_DROPPED: 0.05,
-    EVADED_BOMB: 0.25,
-    NO_BOMB: -0.1,
-    BLOCKED_SELF_IN_UNSAFE_SPACE: -2,
-    NO_CRATE_DESTROYED: -0.5,
+    EVADED_BOMB: 0.1,
+    NO_CRATE_DESTROYED: -0.1,
+    NO_BOMB: -0.05,
+    e.WAITED: -0.05,                # added to avoid wait
+    #BLOCKED_SELF_IN_UNSAFE_SPACE: -0.3,
+    #NO_BOMB: -0.1,
+    #BLOCKED_SELF_IN_UNSAFE_SPACE: -2,
+    #NO_CRATE_DESTROYED: -0.5,
     # e.INVALID_ACTION: -0.2,
     # e.CRATE_DESTROYED: 0.5,
     # e.KILLED_SELF: -0.3,
@@ -262,8 +266,8 @@ def updateQ(self):
         else:
             batch.append(occasion)
             occasion = []
-    Ys = []
-    Xs = []
+    ys = []
+    xas = []
     for occ in batch:
         for i, t in enumerate(occ):
             all_feat_action = get_all_rotations(
@@ -279,20 +283,11 @@ def updateQ(self):
                     Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
                 else:
                     Y = t.reward
-                Ys.append(Y)
-                state = np.array(all_feat_action[j][:-1])
-                Xs.append(state)
-                # # optimize Q towards Y
-                # state = np.array(all_feat_action[j][:-1])
-                # action = all_feat_action[j][-1]
-                #
-                # self.beta[:, action] += (
-                #     ALPHA
-                #     / len(self.transitions)
-                #     * state
-                #     * (Y - state.T @ self.beta[:, action])
-                # )  # TODO: think about batch size division
-    self.forest.fit(Xs, Ys)
+                ys.append(Y)
+                xas.append(all_feat_action[j])
+    xas = np.array(xas)
+    ys = np.array(ys)
+    self.forest.fit(xas, ys)
 
 
 
