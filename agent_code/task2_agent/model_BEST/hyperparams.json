@@ -1,0 +1,18 @@
+{
+    "ALPHA": 0.02,
+    "GAMMA": 0.9,
+    "EPSILON": 0.05,
+    "GAME_REWARDS": {
+        "COIN_COLLECTED": 1,
+        "INVALID_ACTION": -0.1,
+        "CRATE_DESTROYED": 0.5,
+        "KILLED_SELF": -0.5,
+        "BOMB_DROPPED": 0.05,
+        "EVADED_BOMB": 0.1,
+        "NO_CRATE_DESTROYED": -0.2,
+        "DROPPED_BOMB_NEXT_TO_CRATE": 0.1,
+        "NO_BOMB": -0.05,
+        "BLOCKED_SELF_IN_UNSAFE_SPACE": -0.3
+    },
+    "EXPLOIT_SYMMETRY": true
+}

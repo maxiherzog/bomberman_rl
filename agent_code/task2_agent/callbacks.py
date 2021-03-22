@@ -37,9 +37,11 @@ def setup(self):
             self.last_crates = 0
     if self.train or not os.path.isfile(f"model{self.model_suffix}/model.pt"):
         self.logger.info("Setting up model from scratch.")
-        self.forest = RandomForestRegressor(n_estimators=10, max_depth=5, random_state=0)
-        xas = [np.zeros(8)] # gamestate and action as argument
-        ys = [0]            # target response
+        self.forest = RandomForestRegressor(
+            n_estimators=10, max_depth=5, random_state=0
+        )
+        xas = [np.zeros(8)]  # gamestate and action as argument
+        ys = [0]  # target response
         self.forest.fit(xas, ys)
 
     else:
@@ -79,7 +81,6 @@ def act(self, game_state: dict) -> str:
             with open(f"model{self.model_suffix}/test_results.pt", "wb") as file:
                 pickle.dump(self.test_results, file)
 
-    # TODO: Exploration vs exploitation
     # ->EPSILON greedy
 
     if self.train and random.random() < EPSILON:
@@ -137,93 +138,44 @@ def state_to_features(game_state: dict) -> np.array:
     # For example, you could construct several channels of equal shape, ...
     # TODO: channels?
 
-    sight = 3
-    field = game_state["field"]
-
-    for coord in game_state["coins"]:
-        field[coord] = 2
-    for coord, tick in game_state["bombs"]:
-        field[coord] = tick + 3     # assign numbers greater than 3 to bombs, simultaneously coding the ticks
-
-    field_size = len(field)
-    greater_field = -np.zeros((field_size+(sight-1)*2, field_size+(sight-1)*2))
-    greater_field[sight-1:-(sight-1), sight-1:-(sight-1)] = field
-
-    x, y = game_state["self"][3]
-    x += sight - 1
-    y += sight - 1
-    visible_field = greater_field[x-sight:x+sight+1, y-sight:y+sight+1]
-
-    visual_feedback = False
-    if visual_feedback:
-       for j in range(2*sight+1):
-            s = "|"
-            for i in range(2*sight+1):
-                if visible_field[i, j] == -1:
-                    s += "XXX"
-                elif visible_field[i, j] == 1:
-                    s += "(-)"
-                elif visible_field[i, j] == 0:
-                    s += "   "
-                elif visible_field[i, j] == 2:
-                    s += " $ "
-                elif visible_field[i, j] >= 3:
-                    s += "!%i!" % (visible_field[i, j]-3)
-                else:
-                    raise
-            print(s+"|")
-
-    return np.reshape(visible_field, (-1))
-    # if game_state["bombs"] != []:
-    #     # bombs_dist = np.matrix(game_state["bombs"][:, 0])
-    #     # # print(bombs_dist)
-    #     # distance = bombs_dist - np.array(game_state["self"][3])
-    #     # closest_index = np.argmin(
-    #     #     np.sum(np.abs(distance), axis=1)
-    #     # )  # manhattan distance
-    #     # closest_bomb = distance[closest_index] + 14
-    #     # TODO: schlechter fix for now, immer nur eine Bombe(die eigene) in Task 2
-    #     # deswegen:
-    #     closest_bomb = (
-    #         game_state["bombs"][0][0] - np.array(game_state["self"][3]) + np.full(2, 14)
-    #     )
-    #     bomb_ticker = game_state["bombs"][0][1]
-    # else:
-    #     closest_bomb = [14, 14]  # treat non-existing bombs as [0,0]
-    #     bomb_ticker = 3
-
-    # For example, you could construct several channels of equal shape, ...
-    # if game_state["coins"] != []:
-    #     distance = game_state["coins"] - np.array(game_state["self"][3])
-    #     closest_index = np.argmin(np.sum(np.abs(distance), axis=1))
-    #     closest_coin = distance[closest_index]
-    # else:
-    #     closest_coin = [0, 0]  # treat non-existing coins as [0,0]
-
-    # check surrounding tiles
-    # x_off = [0, 1, 1, 1, 0, -1, -1, -1]  # , 2, -2, 0, 0]
-    # y_off = [1, 1, 0, -1, -1, -1, 0, 1]  # , 0, 0, 2, -2]
-    # x_off = [0, 1, 0, -1]  # , 2, -2, 0, 0]
-    # y_off = [1, 0, -1, 0]  # , 0, 0, 2, -2]
-    # save = np.zeros(len(x_off))
-    # for i in range(len(save)):
-    #     if (
-    #         game_state["self"][3][0] + x_off[i] > 16
-    #         or game_state["self"][3][0] + x_off[i] < 0
-    #     ):
-    #         save[i] = 0
-    #     elif (
-    #         game_state["self"][3][1] + y_off[i] > 16
-    #         or game_state["self"][3][1] + y_off[i] < 0
-    #     ):
-    #         save[i] = 0
-    #     else:
-    #         save[i] = np.abs(
-    #             game_state["field"][
-    #                 game_state["self"][3][0] + x_off[i],
-    #                 game_state["self"][3][1] + y_off[i],
-    #             ]
-    #         )
+    # BETTER FEATURES
+    # sight = 3
+    # field = game_state["field"]
+    #
+    # for coord in game_state["coins"]:
+    #     field[coord] = 2
+    # for coord, tick in game_state["bombs"]:
+    #     field[coord] = tick + 3     # assign numbers greater than 3 to bombs, simultaneously coding the ticks
+    #
+    # field_size = len(field)
+    # greater_field = -np.zeros((field_size+(sight-1)*2, field_size+(sight-1)*2))
+    # greater_field[sight-1:-(sight-1), sight-1:-(sight-1)] = field
+    #
+    # x, y = game_state["self"][3]
+    # x += sight - 1
+    # y += sight - 1
+    # visible_field = greater_field[x-sight:x+sight+1, y-sight:y+sight+1]
+    #
+    # visual_feedback = False
+    # if visual_feedback:
+    #    for j in range(2*sight+1):
+    #         s = "|"
+    #         for i in range(2*sight+1):
+    #             if visible_field[i, j] == -1:
+    #                 s += "XXX"
+    #             elif visible_field[i, j] == 1:
+    #                 s += "(-)"
+    #             elif visible_field[i, j] == 0:
+    #                 s += "   "
+    #             elif visible_field[i, j] == 2:
+    #                 s += " $ "
+    #             elif visible_field[i, j] >= 3:
+    #                 s += "!%i!" % (visible_field[i, j]-3)
+    #             else:
+    #                 raise
+    #         print(s+"|")
+    #
+    # return np.reshape(visible_field, (-1))
 
     # mod_pos = [game_state["self"][3][0] % 2, game_state["self"][3][1] % 2]
 
@@ -345,7 +297,7 @@ def state_to_features(game_state: dict) -> np.array:
 
         # print(found_targets)
         if len(found_targets) == 0:
-            POI_vector = [2, 2]
+            POI_position = game_state["self"][3]
             POI_type = 1
             POI_dist = 0
         else:
@@ -357,7 +309,6 @@ def state_to_features(game_state: dict) -> np.array:
             #     print("WTF, encountered weird found_targets: " + str(found_targets))
             #     found_ind = 0
             # found = found_targets[found_ind]
-            # FIXME: Hier Bug? Indexoutofrange -> numpy?
             POI_position = found[0]
             POI_type = found[1]
 
@@ -377,7 +328,7 @@ def state_to_features(game_state: dict) -> np.array:
     dist = POI_position - np.array(game_state["self"][3])
     bigger = np.argmax(np.abs(dist))
     POI_vector = np.sign(dist) + 1
-    POI_vector[bigger] = (POI_vector[bigger] - 1) * 2 + 2
+    POI_vector[bigger] *= 2
     POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
 
     # channels = []
@@ -393,8 +344,10 @@ def state_to_features(game_state: dict) -> np.array:
 
 
 def get_all_rotations(index_vector):
-    rots = np.reshape(index_vector, (1,-1))     # makes list that only contains index_vector
-                                                # would be cool to find a more readable numpy way...
+    rots = np.reshape(
+        index_vector, (1, -1)
+    )  # makes list that only contains index_vector
+    # would be cool to find a more readable numpy way...
     flipped_vector = flip(index_vector)  # check if already symmetric
     if flipped_vector not in rots:
         rots.append(flipped_vector)
@@ -432,7 +385,7 @@ def rotate(index_vector):
         index_vector[0],
         index_vector[1],
         index_vector[2],
-        -index_vector[5] + 2,  # POI vector y->-x
+        -index_vector[5] + 4,  # POI vector y->-x
         index_vector[4],  # x->y
         index_vector[6],  # POI type invariant
         index_vector[7],  # POI distance invariant
@@ -470,17 +423,17 @@ def flip(index_vector):
         index_vector[3],
         index_vector[2],
         index_vector[1],
-        -index_vector[4]+4,  # flip
-        index_vector[5],
-        index_vector[6],
-        index_vector[7],
-        action_index
+        -index_vector[4] + 4,  # POI vector x->-x
+        index_vector[5],  # y->y
+        index_vector[6],  # POI type invariant
+        index_vector[7],  # POI distance invariant
+        action_index,
     )
     # if visual_feedback:
     #     visualize(flip, action_index)
     #     print("=================================================================================")
-
-    return np.concatenate((np.reshape(flip, (-1)), [action_index]))
+    return flip
+    # return np.concatenate((np.reshape(flip, (-1)), [action_index]))
 
 
 def visualize(feat, action_index):
