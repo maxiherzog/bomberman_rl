@@ -507,7 +507,7 @@ class GUI:
         # Background and tiles
         self.background = pygame.Surface((s.WIDTH, s.HEIGHT))
         self.background = self.background.convert()
-        self.background.fill((0, 0, 0))
+        self.background.fill((255, 255, 255))
         self.t_wall = pygame.image.load('assets/brick.png')
         self.t_crate = pygame.image.load('assets/crate.png')
 
