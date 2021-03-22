@@ -186,11 +186,7 @@ def state_to_features(game_state: dict) -> np.array:
     if game_state["bombs"] != []:
         # TODO: schlechter fix for now, immer nur eine Bombe(die eigene) in Task 2
         # deswegen:
-        dist = game_state["bombs"][0][0] - np.array(game_state["self"][3])
-        bigger = np.argmax(np.abs(dist))
-        POI_vector = np.sign(dist) + 1
-        POI_vector[bigger] = (POI_vector[bigger] - 2) * 2 + 2
-        POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
+        POI_position = game_state["bombs"][0][0]
         POI_type = 0
 
         free_space = game_state["field"] == 0
@@ -314,11 +310,6 @@ def state_to_features(game_state: dict) -> np.array:
             # FIXME: Hier Bug? Indexoutofrange -> numpy?
             POI_position = found[0]
             POI_type = found[1]
-            dist = POI_position - np.array(game_state["self"][3])
-            POI_vector = np.sign(dist) + 1
-            bigger = np.argmax(np.abs(dist))
-            POI_vector[bigger] = (POI_vector[bigger] - 2) * 2 + 2
-            POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
 
         # ALSO compute save directions
         save = np.zeros(len(x_off))
@@ -332,6 +323,12 @@ def state_to_features(game_state: dict) -> np.array:
                 )
                 + 1
             )
+
+    dist = POI_position - np.array(game_state["self"][3])
+    bigger = np.argmax(np.abs(dist))
+    POI_vector = np.sign(dist) + 1
+    POI_vector[bigger] = (POI_vector[bigger] - 1) * 2 + 2
+    POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
 
     # channels = []
     # channels.append(...)
@@ -399,7 +396,6 @@ def rotate(index_vector):
         # index_vector[2 + 3],
         action_index,
     )
-
     # # print("The resulting rotated vector is: ", rot)
     # visualize(rot)
     #
