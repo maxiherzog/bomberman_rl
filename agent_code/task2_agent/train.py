@@ -12,7 +12,6 @@ from .callbacks import get_all_rotations
 from .callbacks import EPSILON
 from .callbacks import Q
 import numpy as np
-from .sparseTensor import SparseTensor
 
 
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
