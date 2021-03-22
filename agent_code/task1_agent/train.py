@@ -39,6 +39,7 @@ def setup_training(self):
     else:
         self.logger.debug(f"Initializing Q")
         self.Q = np.zeros((len(ACTIONS), 14 * 2 + 1, 14 * 2 + 1, 2, 2))
+        '''
         self.Q[0, :, :14] = 1 # OBEN
         self.Q[0, :, :14,  0, :] = 0
         self.Q[2, :, -14:] = 1 # UNTEN
@@ -47,12 +48,14 @@ def setup_training(self):
         self.Q[3, :14,  :, :, 0] = 0
         self.Q[1, -14:, :] = 1 # RECHTS
         self.Q[1, -14:, :, :, 0] = 0
-
+        '''
         #Q is zero for non existing coins
 
     # measuring
     self.Q_dists = []
     self.tot_rewards = []
+    self.len = []
+    self.counter = 0
 
 def game_events_occurred(
     self,
@@ -80,7 +83,7 @@ def game_events_occurred(
     self.logger.debug(
         f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}'
     )
-
+    self.counter += 1
     # Idea: Add your own events to hand out rewards
     if ...:
         events.append(PLACEHOLDER_EVENT)
@@ -187,6 +190,9 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     Qc[3, :14,  :, :, 0] = 0
     Qc[1, -14:, :] = 1 # RECHTS
     Qc[1, -14:, :, :, 0] = 0
+    
+    self.len.append(self.counter)
+    self.counter = 0
 
     self.tot_rewards.append(tot_reward)
     with open("rewards.pt", "wb") as file:
@@ -194,6 +200,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.Q_dists.append(np.sum(np.abs(Qc-self.Q)))
     with open("Q-dists.pt", "wb") as file:
         pickle.dump(self.Q_dists, file)
+    with open("len.pt", "wb") as file:
+        pickle.dump(self.len, file)
 
 def reward_from_events(self, events: List[str]) -> int:
     """

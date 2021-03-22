@@ -1,6 +1,6 @@
 from collections import deque
 from random import shuffle
-
+import pickle
 import numpy as np
 
 
@@ -71,6 +71,9 @@ def setup(self):
     # While this timer is positive, agent will not hunt/attack opponents
     self.ignore_others_timer = 0
     self.current_round = 0
+    
+    self.steps_counter = 0
+    self.steps = []
 
 
 def reset_self(self):
@@ -78,6 +81,12 @@ def reset_self(self):
     self.coordinate_history = deque([], 20)
     # While this timer is positive, agent will not hunt/attack opponents
     self.ignore_others_timer = 0
+    
+    self.steps.append(self.steps_counter)
+    self.steps_counter = 0
+    
+    with open("steps.pt", "wb") as file:
+        pickle.dump(self.steps, file)
 
 
 def act(self, game_state):
@@ -88,6 +97,9 @@ def act(self, game_state):
     which is a dictionary. Consult 'get_state_for_agent' in environment.py to see
     what it contains.
     """
+    #count steps
+    self.steps_counter += 1
+    
     self.logger.info('Picking action according to rule set')
     # Check if we are in a different round
     if game_state["round"] != self.current_round:
