@@ -38,13 +38,14 @@ def average_every(x, w):
 
 BATCHES = 30
 
-key = ["reward", "crates", "coins", "length", "useless_bombs"]
+key = ["reward", "crates", "coins", "length", "bombs", "useless_bombs"]
 print(key)
 title = [
     "Reward",
     "Amount of Crates Destroyed",
     "Amount of Coins Collected",
     "Episode Length",
+    "Amount of Bombs Dropped",
     "Number of Bombs That Did Not Destroy Any Crates",
 ]
 
@@ -53,6 +54,7 @@ axis = [
     "Amount of Crates Destroyed",
     "Amount of Coins Collected",
     r"$\tau$",
+    "Amount of Bombs Dropped",
     "Number of Bombs That Did Not Destroy Any Crates",
 ]
 
@@ -63,7 +65,7 @@ if not os.path.exists(f"model{MODEL}/plots"):
 with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
 
     analysis_data = pickle.load(file)
-
+    print(analysis_data["reward"])
     for i in range(len(key)):
 
         plt.plot(
@@ -96,13 +98,14 @@ with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
     #     if name[i]=="":
     #         Q = np.array(Q)/6
     #     plt.plot(Q, label=title[i])
-    Qsum = analysis_data["Q_sum"]
-    plt.plot(Qsum)
-    plt.xlabel("Episode")
-    plt.ylabel("$\Sigma_{\{(s, a)\}}Q_{(s,a)}$")
-    plt.title("Sum of All $Q$ Values")
-    plt.savefig(f"model{MODEL}/plots/Qsum.pdf")
-    plt.show()
+    if "Q_sum" in analysis_data:
+        Qsum = analysis_data["Q_sum"]
+        plt.plot(Qsum)
+        plt.xlabel("Episode")
+        plt.ylabel("$\Sigma_{\{(s, a)\}}Q_{(s,a)}$")
+        plt.title("Sum of All $Q$ Values")
+        plt.savefig(f"model{MODEL}/plots/Qsum.pdf")
+        plt.show()
 
     # PLOT Q for one situation
     # ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]

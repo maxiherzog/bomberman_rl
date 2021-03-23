@@ -4,8 +4,6 @@ import random
 import numpy as np
 from random import shuffle
 
-from sklearn.ensemble import RandomForestRegressor
-
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
 EPSILON = 0.05
 
@@ -37,17 +35,11 @@ def setup(self):
             self.last_crates = 0
     if self.train or not os.path.isfile(f"model{self.model_suffix}/model.pt"):
         self.logger.info("Setting up model from scratch.")
-        self.forest = RandomForestRegressor(
-            n_estimators=10, max_depth=5, random_state=0
-        )
-        xas = [np.zeros(8)]  # gamestate and action as argument
-        ys = [0]  # target response
-        self.forest.fit(xas, ys)
 
     else:
         self.logger.info("Loading model.")
         with open(f"model{self.model_suffix}/model.pt", "rb") as file:
-            self.Q = pickle.load(file)
+            self.forest = pickle.load(file)
 
 
 def act(self, game_state: dict) -> str:

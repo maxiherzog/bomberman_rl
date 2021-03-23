@@ -4,6 +4,7 @@ from typing import List
 import os
 
 import json
+from sklearn.ensemble import RandomForestRegressor
 
 import events as e
 from .callbacks import state_to_features
@@ -28,10 +29,12 @@ NEW_PLACE = "NEW_PLACE"
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-ALPHA = 0.02
 GAMMA = 0.9
-N = 2  # for n-step TD Q learning
-XP_BUFFER_SIZE = 10     # higher batch size for forest
+N = 1  # for n-step TD Q learning
+XP_BUFFER_SIZE = 100  # higher batch size for forest
+N_ESTIMATORS = 10
+MAX_DEPTH = 9
+
 
 EXPLOIT_SYMMETRY = True
 GAME_REWARDS = {
@@ -44,7 +47,7 @@ GAME_REWARDS = {
     EVADED_BOMB: 0.1,
     NO_CRATE_DESTROYED: -0.2,
     DROPPED_BOMB_NEXT_TO_CRATE: 0.1,
-    NO_BOMB: -0.05,
+    NO_BOMB: -0.1,  # -0.05,
     BLOCKED_SELF_IN_UNSAFE_SPACE: -0.3,
     # MAXI
     # e.COIN_COLLECTED: 1,
@@ -75,7 +78,7 @@ GAME_REWARDS = {
 }
 
 
-STORE_FREQ = 50
+STORE_FREQ = XP_BUFFER_SIZE
 
 
 def setup_training(self):
@@ -98,7 +101,7 @@ def setup_training(self):
     if os.path.isfile("model/model.pt"):
         self.logger.info("Retraining from saved state.")
         with open("model/model.pt", "rb") as file:
-            self.Q = pickle.load(file)
+            self.forest = pickle.load(file)
 
         self.logger.info("Reloading analysis variables.")
         with open("model/analysis_data.pt", "rb") as file:
@@ -106,54 +109,88 @@ def setup_training(self):
 
     else:
         self.logger.debug("Initializing Q")
-        # self.Q = np.zeros([2, 2, 2, 2, 5, 5, 3, 5, len(ACTIONS)])
-        # 
-        # # dont run into walls
-        # self.Q[0, :, :, :, :, :, :, :, 0] += -2
-        # self.Q[:, 0, :, :, :, :, :, :, 1] += -2
-        # self.Q[:, :, 0, :, :, :, :, :, 2] += -2
-        # self.Q[:, :, :, 0, :, :, :, :, 3] += -2
-        # 
-        # # drop Bomb when near crate
-        # self.Q[:, :, :, :, :, :, 1, 1, 5] += 1
-        # # dont drop Bomb when already having one bomb
-        # self.Q[:, :, :, :, :, :, 0, :, 5] += -2
-        # 
-        # # dont drop bomb when not near crate
-        # self.Q[:, :, :, :, :, :, 1, 2:, 5] += -2
-        # 
-        # # walk towards crates
-        # self.Q[1, :, :, :, :, :2, 1, 2:, 0] += 1
-        # self.Q[:, 1, :, :, -2:, :, 1, 2:, 1] += 1
-        # self.Q[:, :, 1, :, :, -2:, 1, 2:, 2] += 1
-        # self.Q[:, :, :, 1, :2, :, 1, 2:, 3] += 1
-        # 
-        # # walk towards coins
-        # self.Q[1, :, :, :, :, :2, 2, :, 0] += 1
-        # self.Q[:, 1, :, :, -2:, :, 2, :, 1] += 1
-        # self.Q[:, :, 1, :, :, -2:, 2, :, 2] += 1
-        # self.Q[:, :, :, 1, :2, :, 2, :, 3] += 1
-        # 
-        # # walk away from bomb (only if safe) if ON BOMB
-        # self.Q[1, :, :, :, :, :, 0, :, 0] += 1
-        # self.Q[:, 1, :, :, :, :, 0, :, 1] += 1
-        # self.Q[:, :, 1, :, :, :, 0, :, 2] += 1
-        # self.Q[:, :, :, 1, :, :, 0, :, 3] += 1
-        # 
-        # # and in straight lines
-        # # self.Q[:, :, 1, :, 1, 0, 0, 1:, 2] += 1
-        # # self.Q[:, :, :, 1, 2, 1, 0, 1:, 3] += 1
-        # # self.Q[1, :, :, :, 1, 2, 0, 1:, 0] += 1
-        # # self.Q[:, 1, :, :, 0, 1, 0, 1:, 1] += 1
-        # 
-        # # and dont fucking WAIT
-        # self.Q[:, :, :, :, :, :, 0, :, 4] += -1
-        # # but consider waiting if safe/dead
-        # self.Q[0, 0, 0, 0, :, :, 0, :, 4] += 1
+        Q = np.zeros([2, 2, 2, 2, 5, 5, 3, 5, len(ACTIONS)])
+
+        # dont run into walls
+        Q[0, :, :, :, :, :, :, :, 0] += -2
+        Q[:, 0, :, :, :, :, :, :, 1] += -2
+        Q[:, :, 0, :, :, :, :, :, 2] += -2
+        Q[:, :, :, 0, :, :, :, :, 3] += -2
+
+        # drop Bomb when near crate
+        Q[:, :, :, :, :, :, 1, 1, 5] += 1
+        # dont drop Bomb when already having one bomb
+        Q[:, :, :, :, :, :, 0, :, 5] += -2
+
+        # dont drop bomb when not near crate
+        Q[:, :, :, :, :, :, 1, 2:, 5] += -2
+
+        # walk towards crates
+        Q[1, :, :, :, :, :2, 1, 2:, 0] += 1
+        Q[:, 1, :, :, -2:, :, 1, 2:, 1] += 1
+        Q[:, :, 1, :, :, -2:, 1, 2:, 2] += 1
+        Q[:, :, :, 1, :2, :, 1, 2:, 3] += 1
+
+        # walk towards coins
+        Q[1, :, :, :, :, :2, 2, :, 0] += 1
+        Q[:, 1, :, :, -2:, :, 2, :, 1] += 1
+        Q[:, :, 1, :, :, -2:, 2, :, 2] += 1
+        Q[:, :, :, 1, :2, :, 2, :, 3] += 1
+
+        # walk away from bomb (only if safe) if ON BOMB
+        Q[1, :, :, :, :, :, 0, :, 0] += 1
+        Q[:, 1, :, :, :, :, 0, :, 1] += 1
+        Q[:, :, 1, :, :, :, 0, :, 2] += 1
+        Q[:, :, :, 1, :, :, 0, :, 3] += 1
+
+        # and in straight lines
+        # Q[:, :, 1, :, 1, 0, 0, 1:, 2] += 1
+        # Q[:, :, :, 1, 2, 1, 0, 1:, 3] += 1
+        # Q[1, :, :, :, 1, 2, 0, 1:, 0] += 1
+        # Q[:, 1, :, :, 0, 1, 0, 1:, 1] += 1
+
+        # and dont fucking WAIT
+        Q[:, :, :, :, :, :, 0, :, 4] += -1
+        # but consider waiting if safe/dead
+        Q[0, 0, 0, 0, :, :, 0, :, 4] += 1
+
+        xas = []  #  gamestate and action as argument
+        ys = []  # target response
+
+        for i0 in range(Q.shape[0]):
+            for i1 in range(Q.shape[1]):
+                for i2 in range(Q.shape[2]):
+                    for i3 in range(Q.shape[3]):
+                        for i4 in range(Q.shape[4]):
+                            for i5 in range(Q.shape[5]):
+                                for i6 in range(Q.shape[6]):
+                                    for i7 in range(Q.shape[7]):
+                                        for a in range(Q.shape[8]):
+                                            if (
+                                                Q[i0, i1, i2, i3, i4, i5, i6, i7, a]
+                                                != 0
+                                            ):
+                                                xas.append(
+                                                    [i0, i1, i2, i3, i4, i5, i6, i7, a]
+                                                )
+                                                ys.append(
+                                                    Q[i0, i1, i2, i3, i4, i5, i6, i7, a]
+                                                )
+
+        self.forest = RandomForestRegressor(
+            n_estimators=10, max_depth=8, random_state=0
+        )
+        print(
+            "Fitting forest.. dofs:",
+            2 ** MAX_DEPTH * N_ESTIMATORS,
+            "vs.",
+            np.prod(Q.shape),
+        )
+        self.forest.fit(xas, ys)
 
         # init measured variables
         self.analysis_data = {
-            "Q_sum": [],
+            # "Q_sum": [],
             # "Q_sum_move": [],
             # "Q_sum_bomb": [],
             # "Q_sum_wait": [],
@@ -162,18 +199,20 @@ def setup_training(self):
             "coins": [],
             "crates": [],
             "length": [],
+            "bombs": [],
             "useless_bombs": [],
         }
 
         # dump hyper parameters as json
         hyperparams = {
-            "ALPHA": ALPHA,
             "GAMMA": GAMMA,
             "EPSILON": EPSILON,
             "XP_BUFFER_SIZE": XP_BUFFER_SIZE,
             "N": N,
             "GAME_REWARDS": GAME_REWARDS,
             "EXPLOIT_SYMMETRY": EXPLOIT_SYMMETRY,
+            "N_ESTIMATORS": N_ESTIMATORS,
+            "MAX_DEPTH": MAX_DEPTH,
         }
         with open("model/hyperparams.json", "w") as file:
             json.dump(hyperparams, file, ensure_ascii=False, indent=4)
@@ -182,6 +221,7 @@ def setup_training(self):
     # hands on variables
     self.crate_counter = 0
     self.coin_counter = 0
+    self.bombs_counter = 0
     self.useless_bombs_counter = 0
 
 
@@ -225,6 +265,9 @@ def game_events_occurred(
     if not e.BOMB_DROPPED in events:
         events.append(NO_BOMB)
 
+    if e.BOMB_DROPPED in events:
+        self.bombs_counter += 1
+
     if e.CRATE_DESTROYED in events:
         self.crate_counter += 1
 
@@ -238,10 +281,10 @@ def game_events_occurred(
         dist = new_game_state["bombs"][0][0] - np.array(new_game_state["self"][3])
         if all(new_feat[:4] == 0) and not (all(dist != 0) or np.sum(np.abs(dist)) > 3):
             events.append(BLOCKED_SELF_IN_UNSAFE_SPACE)
-    if e.MOVED_UP or e.MOVED_DOWN or e.MOVED_LEFT or e.MOVED_RIGHT:
-        if new_game_state["self"][0] not in self.visited:
-            self.visited.append(new_game_state["self"][3])
-            events.append(NEW_PLACE)
+    # if e.MOVED_UP or e.MOVED_DOWN or e.MOVED_LEFT or e.MOVED_RIGHT:
+    #     if new_game_state["self"][0] not in self.visited:
+    #         self.visited.append(new_game_state["self"][3])
+    #         events.append(NEW_PLACE)
 
     # DROPPED_BOMB_NEXT_TO_CRATE
     if e.BOMB_DROPPED in events:
@@ -278,25 +321,18 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             reward_from_events(self, events),
         )
     )
-    
-    # measure
-    tot_reward = 0
-    for trans in self.transitions:
-        if trans.action is not None:
-            tot_reward += trans.reward
 
-    self.analysis_data["reward"].append(tot_reward)
-    self.analysis_data["Q_sum"].append(np.sum(self.Q))
-    
-    # RESET Counters
-    self.crate_counter = 0
-    self.coin_counter = 0
-    self.useless_bombs_counter = 0
-    
     self.analysis_data["crates"].append(self.crate_counter)
     self.analysis_data["coins"].append(self.coin_counter)
     self.analysis_data["length"].append(last_game_state["step"])
+    self.analysis_data["bombs"].append(self.bombs_counter)
     self.analysis_data["useless_bombs"].append(self.useless_bombs_counter)
+
+    # RESET Counters
+    self.crate_counter = 0
+    self.coin_counter = 0
+    self.bombs_counter = 0
+    self.useless_bombs_counter = 0
 
     self.rounds_played += 1
     if self.rounds_played % XP_BUFFER_SIZE == 0:
@@ -315,7 +351,7 @@ def store(self):
     # Store the model
     self.logger.debug("Storing model.")
     with open(r"model/model.pt", "wb") as file:
-        pickle.dump(self.Q, file)
+        pickle.dump(self.forest, file)
     with open("model/analysis_data.pt", "wb") as file:
         pickle.dump(self.analysis_data, file)
 
@@ -323,12 +359,18 @@ def store(self):
 def updateQ(self):
     batch = []
     occasion = []  # storing transitions in occasions to reflect their context
+    # measure reward
+    tot_reward = 0
     for t in self.transitions:
         if t.state is not None:
+            tot_reward += t.reward
             occasion.append(t)  # TODO: prioritize interesting transitions
         else:
+            self.analysis_data["reward"].append(tot_reward)
+            tot_reward = 0
             batch.append(occasion)
             occasion = []
+
     ys = []
     xas = []
     for occ in batch:
