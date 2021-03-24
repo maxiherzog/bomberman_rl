@@ -5,7 +5,7 @@ import numpy as np
 from random import shuffle
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-EPSILON = 0.05
+EPSILON = 0.025
 
 
 def setup(self):

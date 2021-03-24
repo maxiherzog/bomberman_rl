@@ -63,12 +63,22 @@ if not os.path.exists(f"model{MODEL}/plots"):
 with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
 
     analysis_data = pickle.load(file)
-
+    wins = None
+    print(analysis_data)
+    if "wins" in analysis_data:
+        wins = analysis_data["wins"]
+    
     for i in range(len(key)):
-
-        plt.plot(
-            analysis_data[key[i]], "x", alpha=0.2, label="data points", markersize=2
-        )
+        
+        if wins is not None:
+            plt.plot(
+                analysis_data[key[i]][wins], "x", alpha=0.2, label="data points", markersize=2
+            )
+        else:
+            plt.plot(
+                analysis_data[key[i]], "x", alpha=0.2, label="data points", markersize=2
+            )
+        
         if BATCHES != 1:
             arr = average_every(
                 np.array(analysis_data[key[i]]),
@@ -80,6 +90,12 @@ with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
                 arr,
                 label=f"average (batch size={int(len(analysis_data[key[i]])/BATCHES)})",
             )
+        
+        if wins is not None:
+            plt.plot(
+                analysis_data[key[i]][~wins], "x", alpha=0.2, label="data points wins", markersize=2
+            )
+        
 
         plt.xlabel("Episode")
         plt.ylabel(axis[i])
