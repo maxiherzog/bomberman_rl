@@ -10,10 +10,9 @@ from .callbacks import state_to_features
 from .callbacks import ACTIONS
 from .callbacks import get_all_rotations
 from .callbacks import EPSILON
-from .callbacks import value
 import numpy as np
 
-from .regressors import Forest
+from .regressors import Forest, Network
 
 
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
@@ -79,8 +78,7 @@ def setup_training(self):
     else:
         self.logger.debug("Initializing Regressor")
         
-        self.regressor = Forest(8)
-       
+        self.regressor = Network(8)
         
 
         # init measured variables
@@ -254,8 +252,8 @@ def store(self):
 
 
 def updateQ(self):
-    self.regressor.update(self.transitions)
-    '''
+    #self.regressor.update(self.transitions)
+
     batch = []
     occasion = []  # storing transitions in occasions to reflect their context
     for t in self.transitions:
@@ -279,15 +277,18 @@ def updateQ(self):
                 r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
                 # TODO: Different Y models
                 if t.next_state is not None:
-                    Y = sum(r) + GAMMA ** n * np.max(value(self, t.next_state))
+                    #print(t.next_state)
+                    Y = sum(r) + GAMMA ** n * np.max(self.regressor.predict(t.next_state))
                 else:
                     Y = t.reward
                 ys.append(Y)
                 xas.append(all_feat_action[j])
     xas = np.array(xas)
     ys = np.array(ys)
+    #print("xas:", xas)
+    #print("ys:", ys)
     self.regressor.fit(xas, ys)
-    '''
+
 
 
 def reward_from_events(self, events: List[str]) -> int:

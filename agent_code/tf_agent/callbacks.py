@@ -93,6 +93,7 @@ def act(self, game_state: dict) -> str:
 
     # start = time.time()
     #Qs = value(self, feat)
+    #print(feat)
     Qs = self.regressor.predict(feat)
     self.logger.debug("Qs for this situation: " + str(Qs))
     action_index = np.random.choice(np.flatnonzero(Qs == np.max(Qs)))
@@ -278,9 +279,97 @@ def state_to_features(game_state: dict) -> np.array:
 
 
 #### UTILITY FUNCTIONS
+def get_all_rotations(index_vector):
+    rots = np.reshape(
+        index_vector, (1, -1)
+    )  # makes list that only contains index_vector
+    # would be cool to find a more readable numpy way...
+    flipped_vector = flip(index_vector)  # check if already symmetric
+    if flipped_vector not in rots:
+        rots.append(flipped_vector)
+
+    for i in range(0, 3):
+        index_vector = rotate(index_vector)
+        if index_vector not in rots:
+            rots.append(index_vector)
+        flipped_vector = flip(index_vector)
+        if flipped_vector not in rots:
+            rots.append(flipped_vector)
+    return rots
 
 
+def rotate(index_vector):
+    """
+    Rotates the state vector 90 degrees clockwise.
+    """
+    # TODO: BETTER FEATURES
+    # feat = index_vector[:-1]
+    # feat = np.reshape(feat, (7,7))
+    # visual_feedback = False
+    # if visual_feedback:
+    #     visualize(feat, index_vector[-1])
 
+    # rot = np.rot90(feat, k=1)
+
+    if index_vector[-1] <= 3:  # DIRECTIONAL ACTION -> add 1
+        action_index = (index_vector[-1] + 1) % 4
+    else:
+        action_index = index_vector[-1]  # BOMB and WAIT invariant
+
+    rot = (
+        index_vector[3],  # save tiles
+        index_vector[0],
+        index_vector[1],
+        index_vector[2],
+        -index_vector[5] + 4,  # POI vector y->-x
+        index_vector[4],  # x->y
+        index_vector[6],  # POI type invariant
+        index_vector[7],  # POI distance invariant
+        action_index,
+    )
+    # if visual_feedback:
+    #     visualize(rot, action_index)
+    #     print("=================================================================================")
+
+    return rot
+
+    # return np.concatenate((np.reshape(rot, (-1)), [action_index]))
+
+
+def flip(index_vector):
+    """
+    Flips the state vector left to right.
+    """
+    # feat = index_vector[:-1]
+    # feat = np.reshape(feat, (7, 7))
+    # TODO: BETTER FEATURES
+    # visual_feedback = False
+    # if visual_feedback:
+    #    visualize(feat, index_vector[-1])
+    # flip = np.flipud(feat)      # our left right is their up down (coords are switched), check with visual feedback if you don't believe it ;)
+    if index_vector[-1] == 1:  # LEFT RIGHT-> switch
+        action_index = 3
+    elif index_vector[-1] == 3:
+        action_index = 1
+    else:
+        action_index = index_vector[-1]  # UP, DOWN, BOMB and WAIT invariant
+
+    flip = (
+        index_vector[0],  # surrounding
+        index_vector[3],
+        index_vector[2],
+        index_vector[1],
+        -index_vector[4] + 4,  # POI vector x->-x
+        index_vector[5],  # y->y
+        index_vector[6],  # POI type invariant
+        index_vector[7],  # POI distance invariant
+        action_index,
+    )
+    # if visual_feedback:
+    #     visualize(flip, action_index)
+    #     print("=================================================================================")
+    return flip
+    # return np.concatenate((np.reshape(flip, (-1)), [action_index]))
 
 
 def visualize(feat, action_index):
