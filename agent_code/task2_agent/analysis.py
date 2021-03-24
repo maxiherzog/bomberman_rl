@@ -37,7 +37,7 @@ def average_every(x, w):
     return arr
 
 
-BATCHES = 30
+BATCHES = 20
 
 key = ["reward", "crates", "coins", "length", "bombs", "useless_bombs"]
 print(key)
@@ -68,14 +68,16 @@ with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
     analysis_data = pickle.load(file)
     wins = None
     # print(analysis_data)
-    if "wins" in analysis_data:
-        wins = analysis_data["wins"]
+    if "win" in analysis_data.keys():
+        
+        wins = np.array(analysis_data["win"])
+        print("winrate",  round(np.count_nonzero(wins)/len(wins)*100,3), "%")
 
     for i in range(len(key)):
-
+        data = np.array(analysis_data[key[i]])
         if wins is not None:
             plt.plot(
-                analysis_data[key[i]][wins],
+                data[~wins],
                 "x",
                 alpha=0.2,
                 label="data points",
@@ -83,24 +85,24 @@ with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
             )
         else:
             plt.plot(
-                analysis_data[key[i]], "x", alpha=0.2, label="data points", markersize=2
+                data, "x", alpha=0.2, label="data points", markersize=2
             )
 
         if BATCHES != 1:
             arr = average_every(
-                np.array(analysis_data[key[i]]),
-                int(len(analysis_data[key[i]]) / BATCHES) + 1,
+                data,
+                int(len(data) / BATCHES) + 1,
             )
             plt.plot(
-                np.arange(len(arr)) * len(analysis_data[key[i]]) / len(arr)
-                + len(analysis_data[key[i]]) / BATCHES / 2,
+                np.arange(len(arr)) * len(data) / len(arr)
+                + len(data) / BATCHES / 2,
                 arr,
                 label=f"average (batch size={int(len(analysis_data[key[i]])/BATCHES)})",
             )
 
         if wins is not None:
             plt.plot(
-                analysis_data[key[i]][~wins],
+                data[wins],
                 "x",
                 alpha=0.2,
                 label="data points wins",

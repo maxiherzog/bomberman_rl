@@ -33,11 +33,13 @@ def setup(self):
             self.model_suffix = "_" + os.environ["MODELNAME"]
             self.total_crates = 0
             self.last_crates = 0
+            print("WARNING: TESTING (perhaps on a different model!)")
     if self.train or not os.path.isfile(f"model{self.model_suffix}/model.pt"):
         self.logger.info("Setting up model from scratch.")
 
     else:
         self.logger.info("Loading model.")
+        print("Loading model.")
         with open(f"model{self.model_suffix}/model.pt", "rb") as file:
             self.forest = pickle.load(file)
 

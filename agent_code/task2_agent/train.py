@@ -24,16 +24,16 @@ NO_BOMB = "NO_BOMB"
 BLOCKED_SELF_IN_UNSAFE_SPACE = "BLOCKED_SELF_IN_UNSAFE_SPACE"
 DROPPED_BOMB_NEXT_TO_CRATE = "DROPPED_BOMB_NEXT_TO_CRATE"
 NEW_PLACE = "NEW_PLACE"
-
+NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-GAMMA = 0.91
+GAMMA = 0.95
 N = 1  # for n-step TD Q learning
 XP_BUFFER_SIZE = 100  # higher batch size for forest
 N_ESTIMATORS = 10
-MAX_DEPTH = 9
+MAX_DEPTH = 15
 
 
 EXPLOIT_SYMMETRY = True
@@ -48,7 +48,7 @@ GAME_REWARDS = {
     DROPPED_BOMB_NEXT_TO_CRATE: 0.03,
     EVADED_BOMB: 0.1,
     NO_CRATE_DESTROYED: -0.3,
-    NO_BOMB: -0.005,
+    NO_ACTIVE_BOMB: -0.1,
     BLOCKED_SELF_IN_UNSAFE_SPACE: -0.3,
     # MAXI
     # e.COIN_COLLECTED: 1,
@@ -153,7 +153,7 @@ def setup_training(self):
         # and dont fucking WAIT
         Q[:, :, :, :, :, :, 0, :, 4] += -1
         # but consider waiting if safe/dead
-        Q[0, 0, 0, 0, :, :, 0, :, 4] += 1
+        Q[0, 0, 0, 0, :, :, 0, :, 4] += 2
 
         xas = []  #  gamestate and action as argument
         ys = []  # target response
@@ -179,7 +179,7 @@ def setup_training(self):
                                                 )
 
         self.forest = RandomForestRegressor(
-            n_estimators=10, max_depth=8, random_state=0
+            n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
         )
         print(
             "Fitting forest.. dofs:",
@@ -187,8 +187,11 @@ def setup_training(self):
             "vs.",
             np.prod(Q.shape),
         )
+        xas = np.array(xas)
+        ys = np.array(ys)
+        # print("xas", xas.shape, "ys", ys.shape)
         self.forest.fit(xas, ys)
-
+        # print(self.forest.predict(np.reshape([0, 0, 0, 0, 0, 0, 0, 0, 4], (1, -1))))
         # init measured variables
         self.analysis_data = {
             # "Q_sum": [],
@@ -283,6 +286,9 @@ def game_events_occurred(
         dist = new_game_state["bombs"][0][0] - np.array(new_game_state["self"][3])
         if all(new_feat[:4] == 0) and not (all(dist != 0) or np.sum(np.abs(dist)) > 3):
             events.append(BLOCKED_SELF_IN_UNSAFE_SPACE)
+    else:
+        events.append(NO_ACTIVE_BOMB)
+
     # if e.MOVED_UP or e.MOVED_DOWN or e.MOVED_LEFT or e.MOVED_RIGHT:
     #     if new_game_state["self"][0] not in self.visited:
     #         self.visited.append(new_game_state["self"][3])
@@ -377,25 +383,33 @@ def updateQ(self):
     ys = []
     xas = []
     for occ in batch:
+        np.random.shuffle(occ)
         for i, t in enumerate(occ):
-            all_feat_action = get_all_rotations(
-                np.concatenate([occ[i].state, [ACTIONS.index(occ[i].action)]])
-            )
-            for j in range(len(all_feat_action)):
+            action = [ACTIONS.index(t.action)]
+            rots = get_all_rotations(np.concatenate((t.state, action)))
+            for rot in rots:
                 # calculate target response Y using n step TD!
-                n = min(
-                    len(occ) - i, N
-                )  # calculate next N steps, otherwise just as far as possible
-                r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
+                # n = min(
+                #     len(occ) - i, N
+                # )  # calculate next N steps, otherwise just as far as possible
+                # r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
                 # TODO: Different Y models
                 if t.next_state is not None:
-                    Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
+                    # Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
+                    Y = t.reward + GAMMA * np.max(Q(self, t.next_state))
                 else:
                     Y = t.reward
                 ys.append(Y)
-                xas.append(all_feat_action[j])
+                xas.append(rot)
+                for a in range(len(ACTIONS)):
+                    if a != rot[-1]:
+                        ys.append(Q(self, t.state)[a])
+                        xas.append(np.concatenate((rot[:-1], [a])))
+
     xas = np.array(xas)
+
     ys = np.array(ys)
+    # print("xas", xas.shape, "ys", ys.shape)
     self.forest.fit(xas, ys)
 
 
