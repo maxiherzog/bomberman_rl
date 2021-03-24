@@ -21,7 +21,17 @@ mpl.rcParams["axes.prop_cycle"] = cycler(
 # filenames = ["rewards"]
 
 dists = []
-MODELS = ["HANS", "HANS_SYM", "PHILIPP", "MAXI"]
+
+ALL_MODELS = True
+MODELS = []
+
+if ALL_MODELS:
+    for file in os.listdir("."):
+        if os.path.isdir(file):
+            if file.startswith("model_"):
+                model = file[6:]
+                if not model.startswith("_") and model not in MODELS:
+                    MODELS.append(model)
 s = ""
 labels = []
 for name in MODELS:

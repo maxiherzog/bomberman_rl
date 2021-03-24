@@ -29,7 +29,7 @@ NEW_PLACE = "NEW_PLACE"
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-GAMMA = 0.9
+GAMMA = 0.91
 N = 1  # for n-step TD Q learning
 XP_BUFFER_SIZE = 100  # higher batch size for forest
 N_ESTIMATORS = 10
@@ -39,15 +39,16 @@ MAX_DEPTH = 9
 EXPLOIT_SYMMETRY = True
 GAME_REWARDS = {
     # HANS
+    # e.KILLED_OPPONENT: 5,
     e.COIN_COLLECTED: 1,
     e.INVALID_ACTION: -0.1,
     e.CRATE_DESTROYED: 0.5,
     e.KILLED_SELF: -0.5,
-    e.BOMB_DROPPED: 0.05,
+    e.BOMB_DROPPED: 0.02,
+    DROPPED_BOMB_NEXT_TO_CRATE: 0.03,
     EVADED_BOMB: 0.1,
-    NO_CRATE_DESTROYED: -0.2,
-    DROPPED_BOMB_NEXT_TO_CRATE: 0.1,
-    NO_BOMB: -0.1,  # -0.05,
+    NO_CRATE_DESTROYED: -0.3,
+    NO_BOMB: -0.005,
     BLOCKED_SELF_IN_UNSAFE_SPACE: -0.3,
     # MAXI
     # e.COIN_COLLECTED: 1,
@@ -196,6 +197,7 @@ def setup_training(self):
             # "Q_sum_wait": [],
             # "Q_situation": [self.Q[0, 1, 1, 0, 1, 2, 1, 2, :]],
             "reward": [],
+            "win": [],
             "coins": [],
             "crates": [],
             "length": [],
@@ -322,6 +324,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         )
     )
 
+    self.analysis_data["win"].append(last_game_state["self"][1] == 9)
     self.analysis_data["crates"].append(self.crate_counter)
     self.analysis_data["coins"].append(self.coin_counter)
     self.analysis_data["length"].append(last_game_state["step"])

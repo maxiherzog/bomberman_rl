@@ -7,6 +7,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from cycler import cycler
+
 mpl.rcParams["figure.dpi"] = 300
 mpl.rcParams["mathtext.fontset"] = "stix"
 mpl.rcParams["font.family"] = "STIXGeneral"
@@ -65,12 +66,26 @@ if not os.path.exists(f"model{MODEL}/plots"):
 with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
 
     analysis_data = pickle.load(file)
-    print(analysis_data["reward"])
+    wins = None
+    # print(analysis_data)
+    if "wins" in analysis_data:
+        wins = analysis_data["wins"]
+
     for i in range(len(key)):
 
-        plt.plot(
-            analysis_data[key[i]], "x", alpha=0.2, label="data points", markersize=2
-        )
+        if wins is not None:
+            plt.plot(
+                analysis_data[key[i]][wins],
+                "x",
+                alpha=0.2,
+                label="data points",
+                markersize=2,
+            )
+        else:
+            plt.plot(
+                analysis_data[key[i]], "x", alpha=0.2, label="data points", markersize=2
+            )
+
         if BATCHES != 1:
             arr = average_every(
                 np.array(analysis_data[key[i]]),
@@ -81,6 +96,15 @@ with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
                 + len(analysis_data[key[i]]) / BATCHES / 2,
                 arr,
                 label=f"average (batch size={int(len(analysis_data[key[i]])/BATCHES)})",
+            )
+
+        if wins is not None:
+            plt.plot(
+                analysis_data[key[i]][~wins],
+                "x",
+                alpha=0.2,
+                label="data points wins",
+                markersize=2,
             )
 
         plt.xlabel("Episode")

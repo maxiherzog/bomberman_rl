@@ -1,6 +1,6 @@
 {
-    "GAMMA": 0.9,
-    "EPSILON": 0.05,
+  "GAMMA": 0.91,
+  "EPSILON": 0.025,
     "XP_BUFFER_SIZE": 100,
     "N": 1,
     "GAME_REWARDS": {

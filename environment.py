@@ -343,8 +343,8 @@ class GenericWorld:
             len(self.active_agents) == 1
             and (self.arena == 1).sum() == 0
             and all([not c.collectable for c in self.coins])
-            and len(self.bombs) == 0
             # and len(self.bombs) + len(self.explosions) == 0
+            # and len(self.bombs) == 0
         ):
             self.logger.info("One agent left alive with nothing to do, wrap up round")
             return True
