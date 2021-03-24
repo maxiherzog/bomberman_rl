@@ -1,0 +1,341 @@
+import os
+import pickle
+import random
+import numpy as np
+from random import shuffle
+
+from .regressors import Regressor
+
+ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
+EPSILON = 0.05
+
+
+def setup(self):
+    """
+    Setup your code. This is called once when loading each agent.
+    Make sure that you prepare everything such that act(...) can be called.
+
+    When in training mode, the separate `setup_training` in train.py is called
+    after this method. This separation allows you to share your trained agent
+    with other students, without revealing your training code.
+
+    In this example, our model is a set of probabilities over actions
+    that are is independent of the game state.
+
+    :param self: This object is passed to all callbacks and you can set arbitrary values.
+    """
+
+    ### CHANGE ONLY IF YOU KNOW WHAT YOU ARE DOING, no sync with training!
+    self.model_suffix = ""
+
+    # TEST BENCH CODE
+    if "TESTING" in os.environ:
+        if os.environ["TESTING"] == "YES":
+            self.test_results = {"crates": [], "total_crates": []}
+            self.model_suffix = "_" + os.environ["MODELNAME"]
+            self.total_crates = 0
+            self.last_crates = 0
+    if self.train or not os.path.isfile(f"model{self.model_suffix}/model.pt"):
+        self.logger.info("Setting up model from scratch.")
+        '''
+        self.forest = RandomForestRegressor(
+            n_estimators=10, max_depth=5, random_state=0
+        )
+        xas = [np.zeros(8)]  # gamestate and action as argument
+        ys = [0]  # target response
+        self.forest.fit(xas, ys)
+        ''' 
+        
+        self.regressor = Regressor(8)
+
+    else:
+        self.logger.info("Loading model.")
+        with open(f"model{self.model_suffix}/model.pt", "rb") as file:
+            self.regressor = pickle.load(file)
+
+
+def act(self, game_state: dict) -> str:
+    """
+    Your agent should parse the input, think, and take a decision.
+    When not in training mode, the maximum execution time for this method is 0.5s.
+
+    :param self: The same object that is passed to all of your callbacks.
+    :param game_state: The dictionary that describes everything on the board.
+    :return: The action to take as a string.
+    """
+    # print("-----------------")
+
+    feat = state_to_features(game_state)
+    self.logger.debug(
+        "Querying model for action with feature " + str(tuple(feat)) + "."
+    )
+
+    # TEST BENCH CODE
+    if "TESTING" in os.environ:
+        if os.environ["TESTING"] == "YES":
+            crates = np.count_nonzero(game_state["field"] == 1)
+            if self.total_crates == 0 or self.last_crates < crates:
+                self.total_crates = crates
+                self.test_results["total_crates"].append(crates)
+                self.test_results["crates"].append(crates)
+            elif self.last_crates > crates:
+                self.test_results["crates"][-1] = crates
+            self.last_crates = crates
+
+            with open(f"model{self.model_suffix}/test_results.pt", "wb") as file:
+                pickle.dump(self.test_results, file)
+
+    # ->EPSILON greedy
+
+    if self.train and random.random() < EPSILON:
+        self.logger.debug("EPSILON-greedy: Choosing action purely at random.")
+        return np.random.choice(ACTIONS)
+
+    # start = time.time()
+    #Qs = value(self, feat)
+    Qs = self.regressor.predict(feat)
+    self.logger.debug("Qs for this situation: " + str(Qs))
+    action_index = np.random.choice(np.flatnonzero(Qs == np.max(Qs)))
+
+    self.logger.debug("ACTION choosen: " + ACTIONS[action_index])
+    return ACTIONS[action_index]
+
+
+def state_to_features(game_state: dict) -> np.array:
+    """
+    *This is not a required function, but an idea to structure your code.*
+
+    Converts the game state to the input of your model, i.e.
+    a feature vector.
+
+    You can find out about the state of the game environment via game_state,
+    which is a dictionary. Consult 'get_state_for_agent' in environment.py to see
+    what it contains.
+
+    :param game_state:  A dictionary describing the current game board.
+    :return: np.array
+    """
+    # WIRD IM MOMENT 3 MAL AUSGEFÜHRT
+
+    # This is the dict before the game begins and after it ends
+    if game_state is None:
+        return None
+
+    x_off = [0, 1, 0, -1]
+    y_off = [-1, 0, 1, 0]
+
+    # part for computing POI and save
+
+    # for bombs:
+    if game_state["bombs"] != []:
+        # TODO: schlechter fix for now, immer nur eine Bombe(die eigene) in Task 2
+        # deswegen:
+        POI_position = game_state["bombs"][0][0]
+        POI_type = 0
+
+        free_space = game_state["field"] == 0
+        free_space[tuple(game_state["bombs"][0][0])] = False
+
+        start = game_state["self"][3]
+
+        save = [0, 0, 0, 0]
+        x, y = start
+
+        dist = game_state["bombs"][0][0] - np.array(start)
+
+        # if tile already save, show surrounding tiles as [0,0,0,0] (should WAIT)
+        if not (all(dist != 0) or np.sum(np.abs(dist)) > 3):
+            # print("current position not save!")
+            # else: search if tiles are save
+            neighbors = [
+                (x, y)
+                for (x, y) in [
+                    (x + x_off[0], y + y_off[0]),
+                    (x + x_off[1], y + y_off[1]),
+                    (x + x_off[2], y + y_off[2]),
+                    (x + x_off[3], y + y_off[3]),
+                ]
+            ]
+
+            for i, neighbor in enumerate(neighbors):
+                if free_space[neighbor]:
+                    # print("checking..", neighbor)
+                    dist = game_state["bombs"][0][0] - np.array(neighbor)
+                    if all(dist != 0) or np.sum(np.abs(dist)) > 3:
+                        # print("neighbor is save!", neighbor)
+                        save[i] = 1
+                        continue
+                    frontier = [neighbor]
+                    parent_dict = {start: start, neighbor: neighbor}
+                    dist_so_far = {neighbor: 1}
+                    while len(frontier) > 0:
+                        current = frontier.pop(0)
+                        if dist_so_far[current] > game_state["bombs"][0][1] + 1:
+                            # print("too far: stopping here", current)
+                            continue
+                        x, y = current
+                        available_neighbors = [
+                            (x, y)
+                            for (x, y) in [
+                                (x + 1, y),
+                                (x - 1, y),
+                                (x, y + 1),
+                                (x, y - 1),
+                            ]
+                            if free_space[x, y]
+                        ]
+
+                        for neineighbor in available_neighbors:
+                            if neineighbor not in parent_dict:
+                                frontier.append(neineighbor)
+                                parent_dict[neineighbor] = neighbor
+                                dist = game_state["bombs"][0][0] - np.array(neineighbor)
+                                dist_so_far[neineighbor] = dist_so_far[current] + 1
+                                if all(dist != 0) or np.sum(np.abs(dist)) > 3:
+                                    save[i] = 1
+                                    # print("found save spot at ", neineighbor)
+                                    break
+                        else:
+                            continue
+                        break
+        # print(save)
+    else:
+        # for crates, coins: BFS
+
+        start = game_state["self"][3]
+        frontier = [start]
+        parent_dict = {start: start}
+        dist_so_far = {start: 0}
+        found_targets = []  # list of tuples (*coord, type)
+
+        free_space = game_state["field"] == 0
+
+        while len(frontier) > 0:
+            current = frontier.pop(0)
+            if current in game_state["coins"]:
+                found_targets.append([current, 2, dist_so_far[current]])
+
+            # Add unexplored free neighboring tiles to the queue in a random order
+            x, y = current
+            neighbors = [
+                (x, y)
+                for (x, y) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+                if free_space[x, y]
+            ]
+            all_neighbors = [
+                (x, y) for (x, y) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+            ]
+            shuffle(all_neighbors)
+            for neighbor in all_neighbors:
+                if game_state["field"][neighbor] == 1:  # CRATE
+                    found_targets.append([neighbor, 1, dist_so_far[current] + 1])
+
+            shuffle(neighbors)
+            for neighbor in neighbors:
+                if neighbor not in parent_dict:
+                    frontier.append(neighbor)
+                    parent_dict[neighbor] = current
+                    dist_so_far[neighbor] = dist_so_far[current] + 1
+
+        # print(found_targets)
+        if len(found_targets) == 0:
+            POI_position = game_state["self"][3]
+            POI_type = 1
+            POI_dist = 0
+        else:
+            found = sorted(found_targets, key=lambda tar: tar[2])[0]
+            # print(found)
+            # try:
+            #     found_ind = np.argmin(np.array(found_targets, dtype=object)[:, 2], axis=0)
+            # except:
+            #     print("WTF, encountered weird found_targets: " + str(found_targets))
+            #     found_ind = 0
+            # found = found_targets[found_ind]
+            POI_position = found[0]
+            POI_type = found[1]
+
+        # ALSO compute save directions
+        save = np.zeros(len(x_off))
+        for i in range(len(save)):
+            save[i] = (
+                -np.abs(
+                    game_state["field"][
+                        game_state["self"][3][0] + x_off[i],
+                        game_state["self"][3][1] + y_off[i],
+                    ]
+                )
+                + 1
+            )
+
+    dist = POI_position - np.array(game_state["self"][3])
+    bigger = np.argmax(np.abs(dist))
+    POI_vector = np.sign(dist) + 1
+    POI_vector[bigger] *= 2
+    POI_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=0)
+
+    return np.concatenate((save, POI_vector, [POI_type], [POI_dist])).astype(int)
+    # stacked_channels.reshape(-1)
+
+
+#### UTILITY FUNCTIONS
+
+
+
+
+
+def visualize(feat, action_index):
+    print("The resulting vector is: ")
+    sight = 3
+    print("action:", end="")
+    if action_index == 0:
+        print("↑")
+    elif action_index == 1:
+        print("→")
+    elif action_index == 2:
+        print("↓")
+    elif action_index == 3:
+        print("←")
+    elif action_index == 4:
+        print("⊗")
+    elif action_index == 5:
+        print("💣")
+    # else: raise
+
+    for j in range(2 * sight + 1):
+        s = "|"
+        for i in range(2 * sight + 1):
+            if feat[i, j] == -1:
+                s += "XXX"
+            elif feat[i, j] == 1:
+                s += "(-)"
+            elif feat[i, j] == 0:
+                s += "   "
+            elif feat[i, j] == 2:
+                s += " $ "
+            elif feat[i, j] >= 3:
+                s += "!%i!" % (feat[i, j] - 3)
+            else:
+                raise
+        print(s + "|")
+
+
+def visualize_old(index_vector):
+    # x heißt nicht safe, o heißt safe
+    # safe_chars = ["x" if (index_vector[i] == 0) else "o" for i in range(4)]
+    s = ""
+    # l heißt left, r right, u up, d down
+    if index_vector[4] == 0:
+        s += "l"
+    if index_vector[4] == 2:
+        s += "r"
+    if index_vector[5] == 0:
+        s += "u"
+    if index_vector[5] == 2:
+        s += "d"
+    # ? für die felder die nicht gecheckt werden
+    # print("This visualizes to")
+    # print("? ", safe_chars[0], "  ?")
+    # print(safe_chars[3], " ", s, " ", safe_chars[1])
+    # print("? ", safe_chars[2], "  ?")
+
+    # print("With action ", ACTIONS[index_vector[8]])
