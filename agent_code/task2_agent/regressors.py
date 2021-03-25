@@ -4,12 +4,14 @@ Created on Wed Mar 24 10:09:57 2021
 
 @author: Philipp
 """
-import tensorflow as tf
-from tensorflow.keras import Sequential
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.backend import clear_session
+# import tensorflow as tf
+# from tensorflow.keras import Sequential
+# from tensorflow.keras.layers import Dense
+# from tensorflow.keras.backend import clear_session
+from builtins import enumerate
 
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.tree import DecisionTreeRegressor
 
 import numpy as np
 
@@ -20,13 +22,16 @@ class Regressor:
         self.n_actions = n_actions
 
     def fit(self, features, values):
+        """Use new data to update model. 'features' are vectors with gamestate features AND action as last element."""
         raise NotImplementedError("subclasses must override fit()!")
 
     def predict(self, features):
+        """Predict value vector with an entry for every possible action."""
         raise NotImplementedError("subclasses must override predict()!")
 
-    def update(self, transitions):
-        raise NotImplementedError("subclasses must override update()!")
+    # def update(self, transitions):
+    #    raise NotImplementedError("subclasses must override update()!")
+    # this is unused right?
 
 
 class Network(Regressor):
@@ -97,9 +102,7 @@ class Network(Regressor):
 
 
 class Forest(Regressor):
-    def __init__(
-        self, n_features, n_actions=6, n_estimators=10, max_depth=5, random_state=0
-    ):
+    def __init__(self, n_features, n_actions=6, n_estimators=10, max_depth=5, random_state=0):
         super().__init__(n_features, n_actions)
 
         self.n_estimators = n_estimators
@@ -109,7 +112,6 @@ class Forest(Regressor):
         self.forest = RandomForestRegressor(
             n_estimators=self.n_estimators,
             max_depth=self.max_depth,
-            random_state=self.random_state,
         )
 
         # xas = [np.zeros(n_features + 1)]  # gamestate and action as argument
@@ -117,6 +119,7 @@ class Forest(Regressor):
         # self.forest.fit(xas, ys)
 
     def fit(self, features, values):
+        """Use new data to update model. 'features' are vectors with gamestate features AND action as last element."""
         self.forest.fit(features, values)
 
     def predict(self, features):
@@ -126,3 +129,61 @@ class Forest(Regressor):
         xa = np.concatenate((Xs, a), axis=1)
         returns = self.forest.predict(xa)
         return returns
+
+
+class GradientBoostingForest(Regressor):
+    def __init__(self, n_features, n_actions=6, random_state=0, base=None, first_weight=0.1, mu=0.5):
+        # TODO: think about if setting random state makes sense for us
+        super().__init__(n_features, n_actions)
+
+        self.random_state = random_state
+
+        if base is None:
+            self.forest = []
+            self.weights = []
+        else:
+            self.forest = [base]
+            self.weights = [1]
+        self.first_weight = first_weight
+        self.mu = mu
+
+    def fit(self, features, values):
+        # calculate residuals rho with prediction of old model
+        rho = values - self.predict_vec(features)
+        # fit decision stub on residuals of batch
+        stub = DecisionTreeRegressor(max_depth=1, random_state=self.random_state)
+        stub.fit(features, rho)
+
+        # add decision stub to ensemble
+        self.forest.append(stub)
+        self.weights.append(self.first_weight / (1 + self.mu * len(self.forest)))
+
+    def predict_vec(self, feature_vec):
+        response = np.zeros(len(feature_vec))
+        for i, features in enumerate(feature_vec):
+            response[i] = self.predict(features[:-1])[features[-1]]
+        return response
+
+    def predict(self, features):
+        # set up response vector
+        response = np.zeros(self.n_actions)  # one for each action
+
+        # combine features and actions to evaluate them separately -> xa
+        Xs = np.tile(features, (self.n_actions, 1))
+        a = np.reshape(np.arange(self.n_actions), (self.n_actions, 1))
+        xa = np.concatenate((Xs, a), axis=1)
+
+        # for each decision stub in ensemble
+        for i, f in enumerate(self.forest):
+            # predict response for each possible action in parallel and add it to total response with proper weight
+            response += self.weights[i] * f.predict(xa)
+
+        return response
+
+
+class QMatrix():
+    def __init__(self, Q):
+        self.Q = Q
+
+    def predict(self, features):
+        return self.Q[tuple(features.T)]

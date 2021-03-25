@@ -14,6 +14,8 @@ from .callbacks import EPSILON_MIN
 from .callbacks import EPSILON_DECAY
 import numpy as np
 from .regressors import Forest
+from .regressors import GradientBoostingForest
+from .regressors import QMatrix
 
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
 
@@ -159,6 +161,7 @@ def setup_training(self):
         xas = []  #  gamestate and action as argument
         ys = []  # target response
 
+        # set up prior matrix
         for i0 in range(Q.shape[0]):
             for i1 in range(Q.shape[1]):
                 for i2 in range(Q.shape[2]):
@@ -213,8 +216,9 @@ def setup_training(self):
                                                         ]
                                                     )
         # self.regressor = Network(8)
-        self.regressor = Forest(
-            9, n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
+        prior = QMatrix(Q)
+        self.regressor = GradientBoostingForest(
+            n_features=9, random_state=0, base=prior, first_weight=0.1, mu=0.5
         )
         # print(
         #     "Fitting forest.. dofs:",
@@ -395,7 +399,6 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if last_game_state["round"] % STORE_FREQ == 0:
         store(self)
 
-
 def store(self):
     """
     Stores all the files.
@@ -406,7 +409,6 @@ def store(self):
         pickle.dump(self.regressor, file)
     with open("model/analysis_data.pt", "wb") as file:
         pickle.dump(self.analysis_data, file)
-
 
 def updateQ(self):
     batch = []
