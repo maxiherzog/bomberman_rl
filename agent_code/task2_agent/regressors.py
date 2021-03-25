@@ -126,3 +126,34 @@ class Forest(Regressor):
         xa = np.concatenate((Xs, a), axis=1)
         returns = self.forest.predict(xa)
         return returns
+
+
+class LVA(Regressor):
+    def __init__(self, n_features, n_actions=6, alpha=0.02):
+        super().__init__(n_features, n_actions)
+        self.beta = np.zeros((n_features, n_actions))
+        self.alpha = alpha
+        self.forest = RandomForestRegressor(
+            n_estimators=self.n_estimators,
+            max_depth=self.max_depth,
+            random_state=self.random_state,
+        )
+
+        # xas = [np.zeros(n_features + 1)]  # gamestate and action as argument
+        # ys = [0]  # target response
+        # self.forest.fit(xas, ys)
+
+    def fit(self, features, values):
+        # optimize Q towards Y
+        for f in features:
+            state = np.array(f[:-1])
+            action = f[-1]
+            self.beta[:, action] += (
+                ALPHA
+                / len(len(features))
+                * state
+                * (Y - state.T @ self.beta[:, action])
+            )
+
+    def predict(self, features):
+        return features @ self.beta
