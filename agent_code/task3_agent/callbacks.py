@@ -404,3 +404,22 @@ def flip(index_vector):
     #     print("=================================================================================")
     return flip
     # return np.concatenate((np.reshape(flip, (-1)), [action_index]))
+
+
+def check_for_bombs(pos, bombs, return_dist=False):
+    if bombs == []:
+        return False
+    
+    min_d = np.infinity
+    
+    for bomb in bombs:
+        d = np.abs(bomb[0][0] - pos[0]) + np.abs(bomb[0][1] - pos[1])
+        
+        if d < 5:
+            min_d = d
+            bomb_pos = bomb[0]
+            
+            if not return_dist:
+                return True
+    
+    return min_d, bomb_pos
