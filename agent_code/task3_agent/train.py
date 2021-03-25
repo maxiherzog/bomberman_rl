@@ -30,25 +30,26 @@ NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 GAMMA = 0.93
-N = 1  # for n-step TD Q learning
-XP_BUFFER_SIZE = 100  # higher batch size for forest
-N_ESTIMATORS = 100
-MAX_DEPTH = 40
+ALPHA = 0.002
+# N = 1  # for n-step TD Q learning
+# XP_BUFFER_SIZE = 100  # higher batch size for forest
+# N_ESTIMATORS = 100
+# MAX_DEPTH = 40
 
 
 EXPLOIT_SYMMETRY = True
 GAME_REWARDS = {
     # HANS
-    # e.KILLED_OPPONENT: 5,
-    e.COIN_COLLECTED: 2,
+    e.KILLED_OPPONENT: 2,
+    e.COIN_COLLECTED: 1,
     e.INVALID_ACTION: -0.1,
-    e.CRATE_DESTROYED: 0.7,
+    e.CRATE_DESTROYED: 0.4,
     e.KILLED_SELF: -0.5,
     e.BOMB_DROPPED: 0.02,
-    DROPPED_BOMB_NEXT_TO_CRATE: 0.2,
+    DROPPED_BOMB_NEXT_TO_CRATE: 0.1,
     EVADED_BOMB: 0.1,
     NO_CRATE_DESTROYED: -0.3,
-    NO_ACTIVE_BOMB: -0.1,
+    NO_ACTIVE_BOMB: -0.07,
     BLOCKED_SELF_IN_UNSAFE_SPACE: -0.3,
     # MAXI
     # e.COIN_COLLECTED: 1,
@@ -79,7 +80,7 @@ GAME_REWARDS = {
 }
 
 
-STORE_FREQ = XP_BUFFER_SIZE
+STORE_FREQ = 100
 
 
 def setup_training(self):
@@ -102,7 +103,7 @@ def setup_training(self):
     if os.path.isfile("model/model.pt"):
         self.logger.info("Retraining from saved state.")
         with open("model/model.pt", "rb") as file:
-            self.regressor = pickle.load(file)
+            self.Q = pickle.load(file)
 
         self.logger.info("Reloading analysis variables.")
         with open("model/analysis_data.pt", "rb") as file:
@@ -110,23 +111,26 @@ def setup_training(self):
 
     else:
         self.logger.debug("Initializing Q")
-        Q = np.zeros([2, 2, 2, 2, 5, 5, 2, 2, 5, len(ACTIONS)])
+        self.Q = np.zeros([2, 2, 2, 2, 2, 5, 5, 2, 2, 5, 5, 4,2, len(ACTIONS)])
+        print(np.prod(self.Q.shape))
 
+        #(save, POI_vector, [POI_type], [POI_dist], NEY_vector, [NEY_dist], [bomb_left])
         # dont run into walls
-        Q[0, :, :, :, :, :, :, :, :, 0] += -2
-        Q[:, 0, :, :, :, :, :, :, :, 1] += -2
-        Q[:, :, 0, :, :, :, :, :, :, 2] += -2
-        Q[:, :, :, 0, :, :, :, :, :, 3] += -2
+        self.Q[0, :, :, :, :, :, :, :, :, :, :, :, :, 0] += -2
+        self.Q[:, 0, :, :, :, :, :, :, :, :, :, :, :, 1] += -2
+        self.Q[:, :, 0, :, :, :, :, :, :, :, :, :, :, 2] += -2
+        self.Q[:, :, :, 0, :, :, :, :, :, :, :, :, :, 3] += -2
+        #
+        # # drop Bomb when near crate
+        self.Q[:, :, :, :, :, :, :, 0, 0, :, :, :, 1, 5] += 2
 
-        # drop Bomb when near crate
-        Q[:, :, :, :, :, :, 1, 0, 1, 5] += 2
-        # dont drop Bomb when already having one bomb
-        Q[:, :, :, :, :, :, 0, 0, :, 5] += -2
-
+        # # dont drop Bomb when already having one bomb
+        self.Q[:, :, :, :, :, :, :, :, :, :, :, :, 0, 5] += -2
+        #
         # dont drop bomb when not near crate
-        Q[:, :, :, :, :, :, 1, 0, 2:, 5] += -2
+        self.Q[:, :, :, :, :, :, :, 0, 1, :, :, :, 1, 5] += -1
         # or near coin
-        Q[:, :, :, :, :, :, 1, 1, :, 5] += -2
+        self.Q[:, :, :, :, :, :, :, 1, :, :, :, :, 1, 5] += -2
         # # walk towards crates
         # Q[1, :, :, :, :, :2, 1, 0, 2:, 0] += 1
         # Q[:, 1, :, :, -2:, :, 1, 0, 2:, 1] += 1
@@ -139,93 +143,88 @@ def setup_training(self):
         # Q[:, :, 1, :, :, -2:, 1, 1, :, 2] += 1
         # Q[:, :, :, 1, :2, :, 1, 1, :, 3] += 1
 
-        # walk away from bomb (only if safe) if ON BOMB
-        Q[1, :, :, :, :, :, 0, 0, :, 0] += 1
-        Q[:, 1, :, :, :, :, 0, 0, :, 1] += 1
-        Q[:, :, 1, :, :, :, 0, 0, :, 2] += 1
-        Q[:, :, :, 1, :, :, 0, 0, :, 3] += 1
+        # walk away if not on save tile (only if safe)
+        self.Q[1, :, :, :, 0, :, :, :, :, :, :, :, :, 0] += 2
+        self.Q[:, 1, :, :, 0, :, :, :, :, :, :, :, :, 1] += 2
+        self.Q[:, :, 1, :, 0, :, :, :, :, :, :, :, :, 2] += 2
+        self.Q[:, :, :, 1, 0, :, :, :, :, :, :, :, :, 3] += 2
 
-        # and in straight lines
-        # Q[:, :, 1, :, 1, 0, 0, 1:, 2] += 1
-        # Q[:, :, :, 1, 2, 1, 0, 1:, 3] += 1
-        # Q[1, :, :, :, 1, 2, 0, 1:, 0] += 1
-        # Q[:, 1, :, :, 0, 1, 0, 1:, 1] += 1
 
         # and dont fucking WAIT
-        Q[:, :, :, :, :, :, 0, 0, :, 4] += -2
+        self.Q[:, :, :, :, 0, :, :, :, :, :, :, :, :, 4] += -2
         # but consider waiting if safe/dead
-        Q[0, 0, 0, 0, :, :, 0, 0, :, 4] += 2
+        self.Q[0, 0, 0, 0, 1, :, :, :, :, :, :, :, :, 4] += 2
 
-        xas = []  #  gamestate and action as argument
-        ys = []  # target response
-
-        for i0 in range(Q.shape[0]):
-            for i1 in range(Q.shape[1]):
-                for i2 in range(Q.shape[2]):
-                    for i3 in range(Q.shape[3]):
-                        for i4 in range(Q.shape[4]):
-                            for i5 in range(Q.shape[5]):
-                                for i6 in range(Q.shape[6]):
-                                    for i7 in range(Q.shape[7]):
-                                        for i8 in range(Q.shape[8]):
-                                            for a in range(Q.shape[8]):
-                                                if (
-                                                    Q[
-                                                        i0,
-                                                        i1,
-                                                        i2,
-                                                        i3,
-                                                        i4,
-                                                        i5,
-                                                        i6,
-                                                        i7,
-                                                        i8,
-                                                        a,
-                                                    ]
-                                                    != 0
-                                                ):
-                                                    xas.append(
-                                                        [
-                                                            i0,
-                                                            i1,
-                                                            i2,
-                                                            i3,
-                                                            i4,
-                                                            i5,
-                                                            i6,
-                                                            i7,
-                                                            i8,
-                                                            a,
-                                                        ]
-                                                    )
-                                                    ys.append(
-                                                        Q[
-                                                            i0,
-                                                            i1,
-                                                            i2,
-                                                            i3,
-                                                            i4,
-                                                            i5,
-                                                            i6,
-                                                            i7,
-                                                            i8,
-                                                            a,
-                                                        ]
-                                                    )
+        # xas = []  #  gamestate and action as argument
+        # ys = []  # target response
+        #
+        # for i0 in range(Q.shape[0]):
+        #     for i1 in range(Q.shape[1]):
+        #         for i2 in range(Q.shape[2]):
+        #             for i3 in range(Q.shape[3]):
+        #                 for i4 in range(Q.shape[4]):
+        #                     for i5 in range(Q.shape[5]):
+        #                         for i6 in range(Q.shape[6]):
+        #                             for i7 in range(Q.shape[7]):
+        #                                 for i8 in range(Q.shape[8]):
+        #                                     for a in range(Q.shape[8]):
+        #                                         if (
+        #                                             Q[
+        #                                                 i0,
+        #                                                 i1,
+        #                                                 i2,
+        #                                                 i3,
+        #                                                 i4,
+        #                                                 i5,
+        #                                                 i6,
+        #                                                 i7,
+        #                                                 i8,
+        #                                                 a,
+        #                                             ]
+        #                                             != 0
+        #                                         ):
+        #                                             xas.append(
+        #                                                 [
+        #                                                     i0,
+        #                                                     i1,
+        #                                                     i2,
+        #                                                     i3,
+        #                                                     i4,
+        #                                                     i5,
+        #                                                     i6,
+        #                                                     i7,
+        #                                                     i8,
+        #                                                     a,
+        #                                                 ]
+        #                                             )
+        #                                             ys.append(
+        #                                                 Q[
+        #                                                     i0,
+        #                                                     i1,
+        #                                                     i2,
+        #                                                     i3,
+        #                                                     i4,
+        #                                                     i5,
+        #                                                     i6,
+        #                                                     i7,
+        #                                                     i8,
+        #                                                     a,
+        #                                                 ]
+        #                                             )
         # self.regressor = Network(8)
-        self.regressor = Forest(
-            9, n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
-        )
-        # print(
-        #     "Fitting forest.. dofs:",
-        #     2 ** MAX_DEPTH * N_ESTIMATORS,
-        #     "vs.",
-        #     np.prod(Q.shape),
+        # self.regressor = Forest(
+        #     9, n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
         # )
-        xas = np.array(xas)
-        ys = np.array(ys)
-        # print("Fitting xas", xas.shape, "ys", ys.shape)
-        self.regressor.fit(xas, ys)
+        # # print(
+        # #     "Fitting forest.. dofs:",
+        # #     2 ** MAX_DEPTH * N_ESTIMATORS,
+        # #     "vs.",
+        # #     np.prod(Q.shape),
+        # # )
+        # xas = np.array(xas)
+        # ys = np.array(ys)
+        # # print("Fitting xas", xas.shape, "ys", ys.shape)
+        # self.regressor.fit(xas, ys)
         # print(self.forest.predict(np.reshape([0, 0, 0, 0, 0, 0, 0, 0, 4], (1, -1))))
         # init measured variables
         self.analysis_data = {
@@ -251,10 +250,10 @@ def setup_training(self):
                 "EPSILON_MIN": EPSILON_MIN,
                 "EPSILON_DECAY": EPSILON_DECAY,
             },
-            "XP_BUFFER_SIZE": XP_BUFFER_SIZE,
-            "N": N,
-            "EXPLOIT_SYMMETRY": EXPLOIT_SYMMETRY,
-            "REGRESSION TREE": {"N_ESTIMATORS": N_ESTIMATORS, "MAX_DEPTH": MAX_DEPTH,},
+            # "XP_BUFFER_SIZE": XP_BUFFER_SIZE,
+            # "N": N,
+            # "EXPLOIT_SYMMETRY": EXPLOIT_SYMMETRY,
+            # "REGRESSION TREE": {"N_ESTIMATORS": N_ESTIMATORS, "MAX_DEPTH": MAX_DEPTH,},
             "GAME_REWARDS": GAME_REWARDS,
         }
         with open("model/hyperparams.json", "w") as file:
@@ -387,14 +386,36 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.useless_bombs_counter = 0
 
     self.rounds_played += 1
-    if self.rounds_played % XP_BUFFER_SIZE == 0:
-        updateQ(self)
-        # clear transitions -> ready for next game
-        self.transitions = deque(maxlen=None)
+    # if self.rounds_played % XP_BUFFER_SIZE == 0:
+    #     updateQ(self)
+    #     # clear transitions -> ready for next game
+    #     self.transitions = deque(maxlen=None)
+
+    tot_reward = 0
+    for t in self.transitions:
+        if t.action != None:
+            tot_reward += t.reward
+
+            if t.next_state is None:
+                V = 0
+            else:
+                V = np.max(
+                    self.Q[tuple(t.next_state)]
+                )  # TODO: SARSA vs Q-Learning V
+            action_index = ACTIONS.index(t.action)
+
+            # get all symmetries
+            origin_vec = np.concatenate((t.state, [action_index]))
+            for rot in get_all_rotations(origin_vec):
+                self.Q[tuple(rot)] += ALPHA * (
+                    t.reward + GAMMA * V - self.Q[tuple(origin_vec)]
+                )
+
+    self.analysis_data["reward"].append(tot_reward)
 
     if last_game_state["round"] % STORE_FREQ == 0:
         store(self)
-
+    self.transitions = deque(maxlen=None)
 
 def store(self):
     """
@@ -403,57 +424,57 @@ def store(self):
     # Store the model
     self.logger.debug("Storing model.")
     with open(r"model/model.pt", "wb") as file:
-        pickle.dump(self.regressor, file)
+        pickle.dump(self.Q, file)
     with open("model/analysis_data.pt", "wb") as file:
         pickle.dump(self.analysis_data, file)
 
 
-def updateQ(self):
-    batch = []
-    occasion = []  # storing transitions in occasions to reflect their context
-    # measure reward
-    tot_reward = 0
-    for t in self.transitions:
-        if t.state is not None:
-            tot_reward += t.reward
-            occasion.append(t)  # TODO: prioritize interesting transitions
-        else:
-            self.analysis_data["reward"].append(tot_reward)
-            tot_reward = 0
-            batch.append(occasion)
-            occasion = []
-
-    ys = []
-    xas = []
-    for occ in batch:
-        np.random.shuffle(occ)
-        for i, t in enumerate(occ):
-            action = [ACTIONS.index(t.action)]
-            rots = get_all_rotations(np.concatenate((t.state, action)))
-            for rot in rots:
-                # calculate target response Y using n step TD!
-                # n = min(
-                #     len(occ) - i, N
-                # )  # calculate next N steps, otherwise just as far as possible
-                # r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
-                # TODO: Different Y models
-                if t.next_state is not None:
-                    # Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
-                    Y = t.reward + GAMMA * np.max(self.regressor.predict(t.next_state))
-                else:
-                    Y = t.reward
-                ys.append(Y)
-                xas.append(rot)
-                for a in range(len(ACTIONS)):
-                    if a != rot[-1]:
-                        ys.append(self.regressor.predict(t.state)[a])
-                        xas.append(np.concatenate((rot[:-1], [a])))
-
-    xas = np.array(xas)
-
-    ys = np.array(ys)
-    # print("Fitting xas", xas.shape, "ys", ys.shape)
-    self.regressor.fit(xas, ys)
+# def updateQ(self):
+#     batch = []
+#     occasion = []  # storing transitions in occasions to reflect their context
+#     # measure reward
+#     tot_reward = 0
+#     for t in self.transitions:
+#         if t.state is not None:
+#             tot_reward += t.reward
+#             occasion.append(t)  # TODO: prioritize interesting transitions
+#         else:
+#             self.analysis_data["reward"].append(tot_reward)
+#             tot_reward = 0
+#             batch.append(occasion)
+#             occasion = []
+#
+#     ys = []
+#     xas = []
+#     for occ in batch:
+#         np.random.shuffle(occ)
+#         for i, t in enumerate(occ):
+#             action = [ACTIONS.index(t.action)]
+#             rots = get_all_rotations(np.concatenate((t.state, action)))
+#             for rot in rots:
+#                 # calculate target response Y using n step TD!
+#                 # n = min(
+#                 #     len(occ) - i, N
+#                 # )  # calculate next N steps, otherwise just as far as possible
+#                 # r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
+#                 # TODO: Different Y models
+#                 if t.next_state is not None:
+#                     # Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
+#                     Y = t.reward + GAMMA * np.max(self.regressor.predict(t.next_state))
+#                 else:
+#                     Y = t.reward
+#                 ys.append(Y)
+#                 xas.append(rot)
+#                 for a in range(len(ACTIONS)):
+#                     if a != rot[-1]:
+#                         ys.append(self.regressor.predict(t.state)[a])
+#                         xas.append(np.concatenate((rot[:-1], [a])))
+#
+#     xas = np.array(xas)
+#
+#     ys = np.array(ys)
+#     # print("Fitting xas", xas.shape, "ys", ys.shape)
+#     self.regressor.fit(xas, ys)
 
 
 def reward_from_events(self, events: List[str]) -> int:
