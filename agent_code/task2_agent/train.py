@@ -428,20 +428,18 @@ def updateQ(self):
     ys = []
     xas = []
     for occ in batch:
-        np.random.shuffle(occ)
         for i, t in enumerate(occ):
             action = [ACTIONS.index(t.action)]
             rots = get_all_rotations(np.concatenate((t.state, action)))
             for rot in rots:
                 # calculate target response Y using n step TD!
-                # n = min(
-                #     len(occ) - i, N
-                # )  # calculate next N steps, otherwise just as far as possible
-                # r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
+                n = min(
+                    len(occ) - i - 1, N
+                )  # calculate next N steps, otherwise just as far as possible
+                r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
                 # TODO: Different Y models
                 if t.next_state is not None:
-                    # Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
-                    Y = t.reward + GAMMA * np.max(self.regressor.predict(t.next_state))
+                    Y = sum(r) + GAMMA ** n * np.max(self.regressor.predict(occ[i+n].state))
                 else:
                     Y = t.reward
                 ys.append(Y)
