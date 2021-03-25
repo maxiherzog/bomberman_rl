@@ -4,16 +4,16 @@ from typing import List
 import os
 
 import json
-from sklearn.ensemble import RandomForestRegressor
 
 import events as e
 from .callbacks import state_to_features
 from .callbacks import ACTIONS
 from .callbacks import get_all_rotations
-from .callbacks import EPSILON
-from .callbacks import Q
+from .callbacks import EPSILON_MAX
+from .callbacks import EPSILON_MIN
+from .callbacks import EPSILON_DECAY
 import numpy as np
-
+from .regressors import Forest
 
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
 
@@ -29,23 +29,23 @@ NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-GAMMA = 0.95
+GAMMA = 0.93
 N = 1  # for n-step TD Q learning
 XP_BUFFER_SIZE = 100  # higher batch size for forest
-N_ESTIMATORS = 10
-MAX_DEPTH = 15
+N_ESTIMATORS = 100
+MAX_DEPTH = 40
 
 
 EXPLOIT_SYMMETRY = True
 GAME_REWARDS = {
     # HANS
     # e.KILLED_OPPONENT: 5,
-    e.COIN_COLLECTED: 1,
+    e.COIN_COLLECTED: 2,
     e.INVALID_ACTION: -0.1,
-    e.CRATE_DESTROYED: 0.5,
+    e.CRATE_DESTROYED: 0.7,
     e.KILLED_SELF: -0.5,
     e.BOMB_DROPPED: 0.02,
-    DROPPED_BOMB_NEXT_TO_CRATE: 0.03,
+    DROPPED_BOMB_NEXT_TO_CRATE: 0.2,
     EVADED_BOMB: 0.1,
     NO_CRATE_DESTROYED: -0.3,
     NO_ACTIVE_BOMB: -0.1,
@@ -102,7 +102,7 @@ def setup_training(self):
     if os.path.isfile("model/model.pt"):
         self.logger.info("Retraining from saved state.")
         with open("model/model.pt", "rb") as file:
-            self.forest = pickle.load(file)
+            self.regressor = pickle.load(file)
 
         self.logger.info("Reloading analysis variables.")
         with open("model/analysis_data.pt", "rb") as file:
@@ -110,39 +110,40 @@ def setup_training(self):
 
     else:
         self.logger.debug("Initializing Q")
-        Q = np.zeros([2, 2, 2, 2, 5, 5, 3, 5, len(ACTIONS)])
+        Q = np.zeros([2, 2, 2, 2, 5, 5, 2, 2, 5, len(ACTIONS)])
 
         # dont run into walls
-        Q[0, :, :, :, :, :, :, :, 0] += -2
-        Q[:, 0, :, :, :, :, :, :, 1] += -2
-        Q[:, :, 0, :, :, :, :, :, 2] += -2
-        Q[:, :, :, 0, :, :, :, :, 3] += -2
+        Q[0, :, :, :, :, :, :, :, :, 0] += -2
+        Q[:, 0, :, :, :, :, :, :, :, 1] += -2
+        Q[:, :, 0, :, :, :, :, :, :, 2] += -2
+        Q[:, :, :, 0, :, :, :, :, :, 3] += -2
 
         # drop Bomb when near crate
-        Q[:, :, :, :, :, :, 1, 1, 5] += 1
+        Q[:, :, :, :, :, :, 1, 0, 1, 5] += 2
         # dont drop Bomb when already having one bomb
-        Q[:, :, :, :, :, :, 0, :, 5] += -2
+        Q[:, :, :, :, :, :, 0, 0, :, 5] += -2
 
         # dont drop bomb when not near crate
-        Q[:, :, :, :, :, :, 1, 2:, 5] += -2
-
-        # walk towards crates
-        Q[1, :, :, :, :, :2, 1, 2:, 0] += 1
-        Q[:, 1, :, :, -2:, :, 1, 2:, 1] += 1
-        Q[:, :, 1, :, :, -2:, 1, 2:, 2] += 1
-        Q[:, :, :, 1, :2, :, 1, 2:, 3] += 1
-
-        # walk towards coins
-        Q[1, :, :, :, :, :2, 2, :, 0] += 1
-        Q[:, 1, :, :, -2:, :, 2, :, 1] += 1
-        Q[:, :, 1, :, :, -2:, 2, :, 2] += 1
-        Q[:, :, :, 1, :2, :, 2, :, 3] += 1
+        Q[:, :, :, :, :, :, 1, 0, 2:, 5] += -2
+        # or near coin
+        Q[:, :, :, :, :, :, 1, 1, :, 5] += -2
+        # # walk towards crates
+        # Q[1, :, :, :, :, :2, 1, 0, 2:, 0] += 1
+        # Q[:, 1, :, :, -2:, :, 1, 0, 2:, 1] += 1
+        # Q[:, :, 1, :, :, -2:, 1, 0, 2:, 2] += 1
+        # Q[:, :, :, 1, :2, :, 1, 0, 2:, 3] += 1
+        #
+        # # walk towards coins
+        # Q[1, :, :, :, :, :2, 1, 1, :, 0] += 1
+        # Q[:, 1, :, :, -2:, :, 1, 1, :, 1] += 1
+        # Q[:, :, 1, :, :, -2:, 1, 1, :, 2] += 1
+        # Q[:, :, :, 1, :2, :, 1, 1, :, 3] += 1
 
         # walk away from bomb (only if safe) if ON BOMB
-        Q[1, :, :, :, :, :, 0, :, 0] += 1
-        Q[:, 1, :, :, :, :, 0, :, 1] += 1
-        Q[:, :, 1, :, :, :, 0, :, 2] += 1
-        Q[:, :, :, 1, :, :, 0, :, 3] += 1
+        Q[1, :, :, :, :, :, 0, 0, :, 0] += 1
+        Q[:, 1, :, :, :, :, 0, 0, :, 1] += 1
+        Q[:, :, 1, :, :, :, 0, 0, :, 2] += 1
+        Q[:, :, :, 1, :, :, 0, 0, :, 3] += 1
 
         # and in straight lines
         # Q[:, :, 1, :, 1, 0, 0, 1:, 2] += 1
@@ -151,9 +152,9 @@ def setup_training(self):
         # Q[:, 1, :, :, 0, 1, 0, 1:, 1] += 1
 
         # and dont fucking WAIT
-        Q[:, :, :, :, :, :, 0, :, 4] += -1
+        Q[:, :, :, :, :, :, 0, 0, :, 4] += -2
         # but consider waiting if safe/dead
-        Q[0, 0, 0, 0, :, :, 0, :, 4] += 2
+        Q[0, 0, 0, 0, :, :, 0, 0, :, 4] += 2
 
         xas = []  #  gamestate and action as argument
         ys = []  # target response
@@ -166,31 +167,65 @@ def setup_training(self):
                             for i5 in range(Q.shape[5]):
                                 for i6 in range(Q.shape[6]):
                                     for i7 in range(Q.shape[7]):
-                                        for a in range(Q.shape[8]):
-                                            if (
-                                                Q[i0, i1, i2, i3, i4, i5, i6, i7, a]
-                                                != 0
-                                            ):
-                                                xas.append(
-                                                    [i0, i1, i2, i3, i4, i5, i6, i7, a]
-                                                )
-                                                ys.append(
-                                                    Q[i0, i1, i2, i3, i4, i5, i6, i7, a]
-                                                )
-
-        self.forest = RandomForestRegressor(
-            n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
+                                        for i8 in range(Q.shape[8]):
+                                            for a in range(Q.shape[8]):
+                                                if (
+                                                    Q[
+                                                        i0,
+                                                        i1,
+                                                        i2,
+                                                        i3,
+                                                        i4,
+                                                        i5,
+                                                        i6,
+                                                        i7,
+                                                        i8,
+                                                        a,
+                                                    ]
+                                                    != 0
+                                                ):
+                                                    xas.append(
+                                                        [
+                                                            i0,
+                                                            i1,
+                                                            i2,
+                                                            i3,
+                                                            i4,
+                                                            i5,
+                                                            i6,
+                                                            i7,
+                                                            i8,
+                                                            a,
+                                                        ]
+                                                    )
+                                                    ys.append(
+                                                        Q[
+                                                            i0,
+                                                            i1,
+                                                            i2,
+                                                            i3,
+                                                            i4,
+                                                            i5,
+                                                            i6,
+                                                            i7,
+                                                            i8,
+                                                            a,
+                                                        ]
+                                                    )
+        # self.regressor = Network(8)
+        self.regressor = Forest(
+            9, n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
         )
-        print(
-            "Fitting forest.. dofs:",
-            2 ** MAX_DEPTH * N_ESTIMATORS,
-            "vs.",
-            np.prod(Q.shape),
-        )
+        # print(
+        #     "Fitting forest.. dofs:",
+        #     2 ** MAX_DEPTH * N_ESTIMATORS,
+        #     "vs.",
+        #     np.prod(Q.shape),
+        # )
         xas = np.array(xas)
         ys = np.array(ys)
-        # print("xas", xas.shape, "ys", ys.shape)
-        self.forest.fit(xas, ys)
+        # print("Fitting xas", xas.shape, "ys", ys.shape)
+        self.regressor.fit(xas, ys)
         # print(self.forest.predict(np.reshape([0, 0, 0, 0, 0, 0, 0, 0, 4], (1, -1))))
         # init measured variables
         self.analysis_data = {
@@ -211,16 +246,20 @@ def setup_training(self):
         # dump hyper parameters as json
         hyperparams = {
             "GAMMA": GAMMA,
-            "EPSILON": EPSILON,
+            "EPSILON_GREEDY": {
+                "EPSILON_MAX": EPSILON_MAX,
+                "EPSILON_MIN": EPSILON_MIN,
+                "EPSILON_DECAY": EPSILON_DECAY,
+            },
             "XP_BUFFER_SIZE": XP_BUFFER_SIZE,
             "N": N,
-            "GAME_REWARDS": GAME_REWARDS,
             "EXPLOIT_SYMMETRY": EXPLOIT_SYMMETRY,
-            "N_ESTIMATORS": N_ESTIMATORS,
-            "MAX_DEPTH": MAX_DEPTH,
+            "REGRESSION TREE": {"N_ESTIMATORS": N_ESTIMATORS, "MAX_DEPTH": MAX_DEPTH,},
+            "GAME_REWARDS": GAME_REWARDS,
         }
         with open("model/hyperparams.json", "w") as file:
             json.dump(hyperparams, file, ensure_ascii=False, indent=4)
+        store(self)
 
     # init counters
     # hands on variables
@@ -318,6 +357,10 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     :type self: object
     :param self: The same object that is passed to all of your callbacks.
     """
+
+    self.epsilon = np.clip(
+        self.epsilon * EPSILON_DECAY, a_max=EPSILON_MAX, a_min=EPSILON_MIN
+    )
     self.logger.debug(
         f'Encountered event(s) {", ".join(map(repr, events))} in final step'
     )
@@ -360,7 +403,7 @@ def store(self):
     # Store the model
     self.logger.debug("Storing model.")
     with open(r"model/model.pt", "wb") as file:
-        pickle.dump(self.forest, file)
+        pickle.dump(self.regressor, file)
     with open("model/analysis_data.pt", "wb") as file:
         pickle.dump(self.analysis_data, file)
 
@@ -396,21 +439,21 @@ def updateQ(self):
                 # TODO: Different Y models
                 if t.next_state is not None:
                     # Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
-                    Y = t.reward + GAMMA * np.max(Q(self, t.next_state))
+                    Y = t.reward + GAMMA * np.max(self.regressor.predict(t.next_state))
                 else:
                     Y = t.reward
                 ys.append(Y)
                 xas.append(rot)
                 for a in range(len(ACTIONS)):
                     if a != rot[-1]:
-                        ys.append(Q(self, t.state)[a])
+                        ys.append(self.regressor.predict(t.state)[a])
                         xas.append(np.concatenate((rot[:-1], [a])))
 
     xas = np.array(xas)
 
     ys = np.array(ys)
-    # print("xas", xas.shape, "ys", ys.shape)
-    self.forest.fit(xas, ys)
+    # print("Fitting xas", xas.shape, "ys", ys.shape)
+    self.regressor.fit(xas, ys)
 
 
 def reward_from_events(self, events: List[str]) -> int:

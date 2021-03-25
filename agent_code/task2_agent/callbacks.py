@@ -5,7 +5,10 @@ import numpy as np
 from random import shuffle
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-EPSILON = 0.025
+EPSILON_MAX = 0.5
+EPSILON_MIN = 0.025
+EPSILON_DECAY = 0.999
+# EPSILON_MIN reached after about 3000 its
 
 
 def setup(self):
@@ -36,12 +39,15 @@ def setup(self):
             print("WARNING: TESTING (perhaps on a different model!)")
     if self.train or not os.path.isfile(f"model{self.model_suffix}/model.pt"):
         self.logger.info("Setting up model from scratch.")
-
+        # self.regressor = Regressor(8)
+        self.epsilon = EPSILON_MAX
     else:
         self.logger.info("Loading model.")
         print("Loading model.")
         with open(f"model{self.model_suffix}/model.pt", "rb") as file:
-            self.forest = pickle.load(file)
+            self.regressor = pickle.load(file)
+        print("WARNING: Cant use EPSILON_DECAY.. using EPSILON_MIN")
+        self.epislon = EPSILON_MIN
 
 
 def act(self, game_state: dict) -> str:
@@ -77,12 +83,12 @@ def act(self, game_state: dict) -> str:
 
     # ->EPSILON greedy
 
-    if self.train and random.random() < EPSILON:
+    if self.train and random.random() < self.epsilon:
         self.logger.debug("EPSILON-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)
 
     # start = time.time()
-    Qs = Q(self, feat)
+    Qs = self.regressor.predict(feat.reshape(1, -1))
     self.logger.debug("Qs for this situation: " + str(Qs))
     action_index = np.random.choice(np.flatnonzero(Qs == np.max(Qs)))
     # self.logger.debug("Choosing an action took " + str((time.time() - start)) + "ms.")
@@ -102,11 +108,11 @@ def act(self, game_state: dict) -> str:
     return ACTIONS[action_index]
 
 
-def Q(self, X) -> np.array:
-    Xs = np.tile(X, (6, 1))
-    a = np.reshape(np.arange(6), (6, 1))
-    xa = np.concatenate((Xs, a), axis=1)
-    return self.forest.predict(xa)
+# def Q(self, X) -> np.array:
+#     Xs = np.tile(X, (6, 1))
+#     a = np.reshape(np.arange(6), (6, 1))
+#     xa = np.concatenate((Xs, a), axis=1)
+#     return self.regressor.predict(xa)
 
 
 def state_to_features(game_state: dict) -> np.array:
@@ -330,7 +336,14 @@ def state_to_features(game_state: dict) -> np.array:
     # concatenate them as a feature tensor (they must have the same shape), ...
     # stacked_channels = np.stack(channels)
     # and return them as a vector
-    return np.concatenate((save, POI_vector, [POI_type], [POI_dist])).astype(int)
+    if POI_type == 0:
+        POI_bin1 = 0
+        POI_bin2 = 0
+    else:
+        POI_bin1 = 1
+        POI_bin2 = POI_type - 1
+    POI_bin = [POI_bin1, POI_bin2]
+    return np.concatenate((save, POI_vector, POI_bin, [POI_dist])).astype(int)
     # stacked_channels.reshape(-1)
 
 
@@ -382,7 +395,8 @@ def rotate(index_vector):
         -index_vector[5] + 4,  # POI vector y->-x
         index_vector[4],  # x->y
         index_vector[6],  # POI type invariant
-        index_vector[7],  # POI distance invariant
+        index_vector[7],
+        index_vector[8],  # POI distance invariant
         action_index,
     )
     # if visual_feedback:
@@ -420,7 +434,8 @@ def flip(index_vector):
         -index_vector[4] + 4,  # POI vector x->-x
         index_vector[5],  # y->y
         index_vector[6],  # POI type invariant
-        index_vector[7],  # POI distance invariant
+        index_vector[7],
+        index_vector[8],  # POI distance invariant
         action_index,
     )
     # if visual_feedback:
@@ -428,61 +443,3 @@ def flip(index_vector):
     #     print("=================================================================================")
     return flip
     # return np.concatenate((np.reshape(flip, (-1)), [action_index]))
-
-
-def visualize(feat, action_index):
-    print("The resulting vector is: ")
-    sight = 3
-    print("action:", end="")
-    if action_index == 0:
-        print("↑")
-    elif action_index == 1:
-        print("→")
-    elif action_index == 2:
-        print("↓")
-    elif action_index == 3:
-        print("←")
-    elif action_index == 4:
-        print("⊗")
-    elif action_index == 5:
-        print("💣")
-    # else: raise
-
-    for j in range(2 * sight + 1):
-        s = "|"
-        for i in range(2 * sight + 1):
-            if feat[i, j] == -1:
-                s += "XXX"
-            elif feat[i, j] == 1:
-                s += "(-)"
-            elif feat[i, j] == 0:
-                s += "   "
-            elif feat[i, j] == 2:
-                s += " $ "
-            elif feat[i, j] >= 3:
-                s += "!%i!" % (feat[i, j] - 3)
-            else:
-                raise
-        print(s + "|")
-
-
-def visualize_old(index_vector):
-    # x heißt nicht safe, o heißt safe
-    # safe_chars = ["x" if (index_vector[i] == 0) else "o" for i in range(4)]
-    s = ""
-    # l heißt left, r right, u up, d down
-    if index_vector[4] == 0:
-        s += "l"
-    if index_vector[4] == 2:
-        s += "r"
-    if index_vector[5] == 0:
-        s += "u"
-    if index_vector[5] == 2:
-        s += "d"
-    # ? für die felder die nicht gecheckt werden
-    # print("This visualizes to")
-    # print("? ", safe_chars[0], "  ?")
-    # print(safe_chars[3], " ", s, " ", safe_chars[1])
-    # print("? ", safe_chars[2], "  ?")
-
-    # print("With action ", ACTIONS[index_vector[8]])
