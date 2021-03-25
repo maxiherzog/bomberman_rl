@@ -145,14 +145,14 @@ class LVA(Regressor):
 
     def fit(self, features, values):
         # optimize Q towards Y
-        for f in features:
-            state = np.array(f[:-1])
-            action = f[-1]
+        for i in range(len(features)):
+            state = np.array(features[i][:-1])
+            action = features[i][-1]
             self.beta[:, action] += (
                 ALPHA
                 / len(len(features))
                 * state
-                * (Y - state.T @ self.beta[:, action])
+                * (values[i] - state.T @ self.beta[:, action])
             )
 
     def predict(self, features):
