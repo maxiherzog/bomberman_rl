@@ -1,0 +1,69 @@
+
+Wrote profile results to main.py.lprof
+Timer unit: 1e-06 s
+
+Total time: 285.38 s
+File: /home/ho/coding/bomberman_rl/agent_code/task2_agent/train.py
+Function: updateQ at line 415
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   415
+   416
+   417                                           @profile
+   418                                           def updateQ(self):
+   419         2         49.0     24.5      0.0      print("updateQ 0")
+   420         2          3.0      1.5      0.0      batch = []
+   421         2          2.0      1.0      0.0      occasion = []  # storing transitions in occasions to reflect their context
+   422                                               # measure reward
+   423         2          3.0      1.5      0.0      tot_reward = 0
+   424      2256       2719.0      1.2      0.0      for t in self.transitions:
+   425      2254       2905.0      1.3      0.0          if t.state is not None:
+   426      2054       2656.0      1.3      0.0              tot_reward += t.reward
+   427      2054       2731.0      1.3      0.0              occasion.append(t)  # TODO: prioritize interesting transitions
+   428                                                   else:
+   429       200        323.0      1.6      0.0              self.analysis_data["reward"].append(tot_reward)
+   430       200        224.0      1.1      0.0              tot_reward = 0
+   431       200        263.0      1.3      0.0              batch.append(occasion)
+   432       200        246.0      1.2      0.0              occasion = []
+   433
+   434         2          3.0      1.5      0.0      ys = []
+   435         2          3.0      1.5      0.0      xas = []
+   436         2         43.0     21.5      0.0      print("updateQ 1")
+   437         2          3.0      1.5      0.0      times = 0
+   438         2          2.0      1.0      0.0      T = 0
+   439       202        293.0      1.5      0.0      for occ in batch:
+   440       200       1369.0      6.8      0.0          np.random.shuffle(occ)
+   441      2228       4484.0      2.0      0.0          for i, t in enumerate(occ):
+   442      2028       6701.0      3.3      0.0              action = [ACTIONS.index(t.action)]
+   443      2028     394128.0    194.3      0.1              rots = get_all_rotations(np.concatenate((t.state, action)))
+   444      4056      24260.0      6.0      0.0              for rot in rots:
+   445                                                           # calculate target response Y using n step TD!
+   446                                                           # n = min(
+   447                                                           #     len(occ) - i, N
+   448                                                           # )  # calculate next N steps, otherwise just as far as possible
+   449                                                           # r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
+   450                                                           # TODO: Different Y models
+   451      2028       3951.0      1.9      0.0                  t1 = time.time()
+   452      2028       3108.0      1.5      0.0                  if t.next_state is not None:
+   453                                                               # Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
+   454      1830   43328915.0  23677.0     15.2                      Y = t.reward + GAMMA * np.max(self.regressor.predict(t.next_state))
+   455                                                           else:
+   456       198        273.0      1.4      0.0                      Y = t.reward
+   457      2028       5233.0      2.6      0.0                  ys.append(Y)
+   458      2028       3142.0      1.5      0.0                  xas.append(rot)
+   459
+   460     14196      26930.0      1.9      0.0                  for a in range(len(ACTIONS)):
+   461     12168      42929.0      3.5      0.0                      if a != rot[-1]:
+   462     10140  239439030.0  23613.3     83.9                          ys.append(self.regressor.predict(t.state)[a])
+   463     10140     266917.0     26.3      0.1                          xas.append(np.concatenate((rot[:-1], [a])))
+   464      2028       4298.0      2.1      0.0                  t2 = time.time()
+   465      2028       3585.0      1.8      0.0                  T += t2-t1
+   466      2028       2784.0      1.4      0.0                  times += 1
+   467         2         72.0     36.0      0.0      print(T/times, times, T)
+   468         2         21.0     10.5      0.0      print("updateQ 2")
+   469                                               xas = np.array(xas)
+   470         2       9274.0   4637.0      0.0      ys = np.array(ys)
+   471                                               # print("Fitting xas", xas.shape, "ys", ys.shape)
+   472         2       2807.0   1403.5      0.0      self.regressor.fit(xas, ys)
+   473                                               print("updateQ 3")
