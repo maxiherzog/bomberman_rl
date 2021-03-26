@@ -37,7 +37,6 @@ XP_BUFFER_SIZE = 100  # higher batch size for forest
 N_ESTIMATORS = 100
 MAX_DEPTH = 40
 
-
 EXPLOIT_SYMMETRY = True
 GAME_REWARDS = {
     # HANS
@@ -79,7 +78,6 @@ GAME_REWARDS = {
     # e.KILLED_SELF: -2,
     # NO_CRATE_DESTROYED: -3,
 }
-
 
 STORE_FREQ = XP_BUFFER_SIZE
 
@@ -158,7 +156,7 @@ def setup_training(self):
         # but consider waiting if safe/dead
         Q[0, 0, 0, 0, :, :, 0, 0, :, 4] += 2
 
-        xas = []  #  gamestate and action as argument
+        xas = []  # gamestate and action as argument
         ys = []  # target response
 
         # set up prior matrix
@@ -173,19 +171,19 @@ def setup_training(self):
                                         for i8 in range(Q.shape[8]):
                                             for a in range(Q.shape[8]):
                                                 if (
-                                                    Q[
-                                                        i0,
-                                                        i1,
-                                                        i2,
-                                                        i3,
-                                                        i4,
-                                                        i5,
-                                                        i6,
-                                                        i7,
-                                                        i8,
-                                                        a,
-                                                    ]
-                                                    != 0
+                                                        Q[
+                                                            i0,
+                                                            i1,
+                                                            i2,
+                                                            i3,
+                                                            i4,
+                                                            i5,
+                                                            i6,
+                                                            i7,
+                                                            i8,
+                                                            a,
+                                                        ]
+                                                        != 0
                                                 ):
                                                     xas.append(
                                                         [
@@ -218,7 +216,7 @@ def setup_training(self):
         # self.regressor = Network(8)
         prior = QMatrix(Q)
         self.regressor = GradientBoostingForest(
-            n_features=9, random_state=0, base=prior, first_weight=0.1, mu=0.5
+            n_features=9, random_state=0, base=None, first_weight=0.1, mu=0.5
         )
         # print(
         #     "Fitting forest.. dofs:",
@@ -258,7 +256,7 @@ def setup_training(self):
             "XP_BUFFER_SIZE": XP_BUFFER_SIZE,
             "N": N,
             "EXPLOIT_SYMMETRY": EXPLOIT_SYMMETRY,
-            "REGRESSION TREE": {"N_ESTIMATORS": N_ESTIMATORS, "MAX_DEPTH": MAX_DEPTH,},
+            "REGRESSION TREE": {"N_ESTIMATORS": N_ESTIMATORS, "MAX_DEPTH": MAX_DEPTH, },
             "GAME_REWARDS": GAME_REWARDS,
         }
         with open("model/hyperparams.json", "w") as file:
@@ -274,11 +272,11 @@ def setup_training(self):
 
 
 def game_events_occurred(
-    self,
-    old_game_state: dict,
-    self_action: str,
-    new_game_state: dict,
-    events: List[str],
+        self,
+        old_game_state: dict,
+        self_action: str,
+        new_game_state: dict,
+        events: List[str],
 ):
     """
     Called once per step to allow intermediate rewards based on game events.
@@ -399,6 +397,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if last_game_state["round"] % STORE_FREQ == 0:
         store(self)
 
+
 def store(self):
     """
     Stores all the files.
@@ -410,44 +409,77 @@ def store(self):
     with open("model/analysis_data.pt", "wb") as file:
         pickle.dump(self.analysis_data, file)
 
+
 def updateQ(self):
     batch = []
+    occ_lengths = []  # for later slicing
     occasion = []  # storing transitions in occasions to reflect their context
     # measure reward
     tot_reward = 0
-    for t in self.transitions:
+    n_features = 9
+    states = np.ones((len(self.transitions), n_features), dtype=int)  # slightly too long still due to none states
+    actions = np.ones((len(self.transitions)), dtype=int)
+    rewards = np.ones((len(self.transitions)))
+    cs = 0
+    s = 0
+    for i, t in enumerate(self.transitions):
+
         if t.state is not None:
+            states[cs, :] = t.state
+            actions[cs] = ACTIONS.index(t.action)
+            rewards[cs] = t.reward
             tot_reward += t.reward
-            occasion.append(t)  # TODO: prioritize interesting transitions
+            cs += 1
+            s += 1
+            # TODO: prioritize interesting transitions
+
         else:
             self.analysis_data["reward"].append(tot_reward)
             tot_reward = 0
-            batch.append(occasion)
-            occasion = []
+            if s > 0:
+                occ_lengths.append(s)
+                s = 0
+    if s > 0:
+        occ_lengths.append(s)
+    del s
 
     ys = []
     xas = []
-    for occ in batch:
-        for i, t in enumerate(occ):
-            action = [ACTIONS.index(t.action)]
-            rots = get_all_rotations(np.concatenate((t.state, action)))
+    states = states[:np.sum(occ_lengths)]  # cut none states
+
+    predictions = self.regressor.predict_vec(states)
+
+    occ_pointer = 0
+    for occ_l in occ_lengths:
+
+        for i in range(occ_l):
+
+            action = actions[occ_pointer + i]
+            state = states[occ_pointer + i]
+            rots = get_all_rotations(np.concatenate((state, [action])))
             for rot in rots:
                 # calculate target response Y using n step TD!
                 n = min(
-                    len(occ) - i - 1, N
+                    occ_l - i - 1, N
                 )  # calculate next N steps, otherwise just as far as possible
-                r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
+                r = [GAMMA ** k * rewards[occ_pointer + i + k] for k in range(n)]
                 # TODO: Different Y models
-                if t.next_state is not None:
-                    Y = sum(r) + GAMMA ** n * np.max(self.regressor.predict(occ[i+n].state))
+                if states[occ_pointer + i + n] is not None:
+                    Y = sum(r) + GAMMA ** n * np.max(predictions[occ_pointer + i + n])
+                    # Y = sum(r) + GAMMA ** n * np.max(self.regressor.predict(occ[i + n][0]))  # old
                 else:
-                    Y = t.reward
+                    print("SOMETHINGS ROTTON IN updateQ()")
+                # if t.next_state is not None:  # old
+                #     Y = t.reward + GAMMA * np.max(self.regressor.predict(t.next_state))
+                # else:
+                #     Y = t.reward
                 ys.append(Y)
                 xas.append(rot)
-                for a in range(len(ACTIONS)):
-                    if a != rot[-1]:
-                        ys.append(self.regressor.predict(t.state)[a])
-                        xas.append(np.concatenate((rot[:-1], [a])))
+                # for a in range(len(ACTIONS)): # just don't want to bother with this now # TODO: reactivate this
+                #     if a != rot[-1]:
+                #         ys.append(self.regressor.predict(t[0])[a])
+                #         xas.append(np.concatenate((rot[:-1], [a])))
+        occ_pointer += occ_l
 
     xas = np.array(xas)
 
