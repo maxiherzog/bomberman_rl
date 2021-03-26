@@ -216,7 +216,7 @@ def setup_training(self):
         # self.regressor = Network(8)
         prior = QMatrix(Q)
         self.regressor = GradientBoostingForest(
-            n_features=9, random_state=0, base=None, first_weight=0.1, mu=0.5
+            n_features=9, random_state=0, base=prior, first_weight=0.1, mu=0.5
         )
         # print(
         #     "Fitting forest.. dofs:",
