@@ -39,7 +39,7 @@ def average_every(x, w):
 
 BATCHES = 20
 
-key = ["reward", "crates", "coins", "length", "bombs", "useless_bombs"]
+key = ["reward", "crates", "coins", "length", "bombs", "useless_bombs", "kills"]
 print(key)
 title = [
     "Reward",
@@ -48,6 +48,7 @@ title = [
     "Episode Length",
     "Amount of Bombs Dropped",
     "Number of Bombs That Did Not Destroy Any Crates",
+    "Amount of Opponents Killed"
 ]
 
 axis = [
@@ -57,6 +58,7 @@ axis = [
     r"$\tau$",
     "Amount of Bombs Dropped",
     "Number of Bombs That Did Not Destroy Any Crates",
+    "Kills"
 ]
 
 # ensure analysis subfolder
@@ -72,11 +74,11 @@ with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
         
         wins = np.array(analysis_data["win"])
         print("winrate",  round(np.count_nonzero(wins)/len(wins)*100,3), "%")
-
     for i in range(len(key)):
         data = np.array(analysis_data[key[i]])
         if wins is not None:
             plt.plot(
+                np.arange(len(data))[~wins],
                 data[~wins],
                 "x",
                 alpha=0.2,
@@ -102,6 +104,7 @@ with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
 
         if wins is not None:
             plt.plot(
+                np.arange(len(data))[wins],
                 data[wins],
                 "x",
                 alpha=0.2,

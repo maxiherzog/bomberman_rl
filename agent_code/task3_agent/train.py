@@ -19,7 +19,7 @@ Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"
 
 # Events
 EVADED_BOMB = "EVADED_BOMB"
-NO_CRATE_DESTROYED = "NO_CRATE_DESTROYED"
+NO_CRATE_OR_OPPONENT_DESTROYED = "NO_CRATE_OR_OPPONENT_DESTROYED"
 NO_BOMB = "NO_BOMB"
 BLOCKED_SELF_IN_UNSAFE_SPACE = "BLOCKED_SELF_IN_UNSAFE_SPACE"
 DROPPED_BOMB_NEXT_TO_CRATE = "DROPPED_BOMB_NEXT_TO_CRATE"
@@ -30,7 +30,7 @@ NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 GAMMA = 0.93
-ALPHA = 0.002
+ALPHA = 0.2
 # N = 1  # for n-step TD Q learning
 # XP_BUFFER_SIZE = 100  # higher batch size for forest
 # N_ESTIMATORS = 100
@@ -46,18 +46,18 @@ GAME_REWARDS = {
     e.CRATE_DESTROYED: 0.4,
     e.KILLED_SELF: -0.5,
     e.BOMB_DROPPED: 0.02,
-    DROPPED_BOMB_NEXT_TO_CRATE: 0.1,
+    DROPPED_BOMB_NEXT_TO_CRATE: 0.08,
     EVADED_BOMB: 0.1,
-    NO_CRATE_DESTROYED: -0.3,
+    NO_CRATE_OR_OPPONENT_DESTROYED: -0.5,
     NO_ACTIVE_BOMB: -0.07,
-    BLOCKED_SELF_IN_UNSAFE_SPACE: -0.3,
+    BLOCKED_SELF_IN_UNSAFE_SPACE: -0.7,
     # MAXI
     # e.COIN_COLLECTED: 1,
     # e.INVALID_ACTION: -1,
     # BLOCKED_SELF_IN_UNSAFE_SPACE: -10,
     # e.CRATE_DESTROYED: 0.1,
     # NO_BOMB: -0.05,
-    # NO_CRATE_DESTROYED: -3
+    # NO_CRATE_OR_OPPONENT_DESTROYED: -3
     # PHILIPP
     # e.COIN_COLLECTED: 5,
     # e.INVALID_ACTION: -0.5,
@@ -76,7 +76,7 @@ GAME_REWARDS = {
     # NO_BOMB: -0.01,
     # BLOCKED_SELF_IN_UNSAFE_SPACE: -5,
     # e.KILLED_SELF: -2,
-    # NO_CRATE_DESTROYED: -3,
+    # NO_CRATE_OR_OPPONENT_DESTROYED: -3,
 }
 
 
@@ -108,13 +108,19 @@ def setup_training(self):
         self.logger.info("Reloading analysis variables.")
         with open("model/analysis_data.pt", "rb") as file:
             self.analysis_data = pickle.load(file)
-
+        print("WARNING: Cant use EPSILON_DECAY.. using EPSILON_MIN")
+        self.epsilon = EPSILON_MIN
     else:
         self.logger.debug("Initializing Q")
-        self.Q = np.zeros([2, 2, 2, 2, 2, 5, 5, 2, 2, 5, 5, 4,2, len(ACTIONS)])
+        self.Q = np.zeros([2, 2, 2, 2, 2, 5, 5, 2, 2, 5, 5, 4, 2, len(ACTIONS)])
         print(np.prod(self.Q.shape))
 
-        #(save, POI_vector, [POI_type], [POI_dist], NEY_vector, [NEY_dist], [bomb_left])
+        if "AUTOTRAIN" in os.environ:
+            if os.environ["AUTOTRAIN"] == "YES":
+                ALPHA = os.environ["ALPHA"]
+                GAMMA = os.environ["GAMMA"]
+
+        # (save, POI_vector, [POI_type], [POI_dist], NEY_vector, [NEY_dist], [bomb_left])
         # dont run into walls
         self.Q[0, :, :, :, :, :, :, :, :, :, :, :, :, 0] += -2
         self.Q[:, 0, :, :, :, :, :, :, :, :, :, :, :, 1] += -2
@@ -130,7 +136,7 @@ def setup_training(self):
         # dont drop bomb when not near crate
         self.Q[:, :, :, :, :, :, :, 0, 1, :, :, :, 1, 5] += -1
         # or near coin
-        self.Q[:, :, :, :, :, :, :, 1, :, :, :, :, 1, 5] += -2
+        self.Q[:, :, :, :, :, :, :, 1, :, :, :, :, 1, 5] += -1
         # # walk towards crates
         # Q[1, :, :, :, :, :2, 1, 0, 2:, 0] += 1
         # Q[:, 1, :, :, -2:, :, 1, 0, 2:, 1] += 1
@@ -148,7 +154,6 @@ def setup_training(self):
         self.Q[:, 1, :, :, 0, :, :, :, :, :, :, :, :, 1] += 2
         self.Q[:, :, 1, :, 0, :, :, :, :, :, :, :, :, 2] += 2
         self.Q[:, :, :, 1, 0, :, :, :, :, :, :, :, :, 3] += 2
-
 
         # and dont fucking WAIT
         self.Q[:, :, :, :, 0, :, :, :, :, :, :, :, :, 4] += -2
@@ -235,6 +240,7 @@ def setup_training(self):
             # "Q_situation": [self.Q[0, 1, 1, 0, 1, 2, 1, 2, :]],
             "reward": [],
             "win": [],
+            "kills": [],
             "coins": [],
             "crates": [],
             "length": [],
@@ -262,6 +268,7 @@ def setup_training(self):
 
     # init counters
     # hands on variables
+    self.kill_counter = 0
     self.crate_counter = 0
     self.coin_counter = 0
     self.bombs_counter = 0
@@ -301,8 +308,12 @@ def game_events_occurred(
     if e.BOMB_EXPLODED in events and not e.KILLED_SELF in events:
         events.append(EVADED_BOMB)
 
-    if e.BOMB_EXPLODED in events and not e.CRATE_DESTROYED in events:
-        events.append(NO_CRATE_DESTROYED)
+    if (
+        e.BOMB_EXPLODED in events
+        and not e.CRATE_DESTROYED in events
+        and not e.KILLED_OPPONENT in events
+    ):
+        events.append(NO_CRATE_OR_OPPONENT_DESTROYED)
         self.useless_bombs_counter += 1
 
     if not e.BOMB_DROPPED in events:
@@ -320,10 +331,11 @@ def game_events_occurred(
     old_feat = state_to_features(old_game_state)
     new_feat = state_to_features(new_game_state)
     # BLOCKED_SELF_IN_UNSAFE_SPACE
-    if new_game_state["bombs"] != []:
-        dist = new_game_state["bombs"][0][0] - np.array(new_game_state["self"][3])
-        if all(new_feat[:4] == 0) and not (all(dist != 0) or np.sum(np.abs(dist)) > 3):
-            events.append(BLOCKED_SELF_IN_UNSAFE_SPACE)
+    if all(new_feat[:5] == 0):
+        events.append(BLOCKED_SELF_IN_UNSAFE_SPACE)
+    if old_feat is not None:
+        if not (old_feat[12] == 1 or new_feat[12] == 1):
+            events.append(NO_ACTIVE_BOMB)
     else:
         events.append(NO_ACTIVE_BOMB)
 
@@ -334,8 +346,11 @@ def game_events_occurred(
 
     # DROPPED_BOMB_NEXT_TO_CRATE
     if e.BOMB_DROPPED in events:
-        if old_feat[6] == 1 and old_feat[7] == 1:
+        if old_feat[7] == 0 and old_feat[8] == 0:
             events.append(DROPPED_BOMB_NEXT_TO_CRATE)
+
+    if e.KILLED_OPPONENT in events:
+        self.kill_counter += 1
 
     # state_to_features is defined in callbacks.py
     self.transitions.append(
@@ -356,7 +371,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     :type self: object
     :param self: The same object that is passed to all of your callbacks.
     """
-
+    # ADJUST EPSILON
     self.epsilon = np.clip(
         self.epsilon * EPSILON_DECAY, a_max=EPSILON_MAX, a_min=EPSILON_MIN
     )
@@ -372,7 +387,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         )
     )
 
-    self.analysis_data["win"].append(last_game_state["self"][1] == 9)
+    self.analysis_data["kills"].append(self.kill_counter)
+    self.analysis_data["win"].append(self.kill_counter == 3)
     self.analysis_data["crates"].append(self.crate_counter)
     self.analysis_data["coins"].append(self.coin_counter)
     self.analysis_data["length"].append(last_game_state["step"])
@@ -381,6 +397,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # RESET Counters
     self.crate_counter = 0
+    self.kill_counter = 0
     self.coin_counter = 0
     self.bombs_counter = 0
     self.useless_bombs_counter = 0
@@ -399,9 +416,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             if t.next_state is None:
                 V = 0
             else:
-                V = np.max(
-                    self.Q[tuple(t.next_state)]
-                )  # TODO: SARSA vs Q-Learning V
+                V = np.max(self.Q[tuple(t.next_state)])  # TODO: SARSA vs Q-Learning V
             action_index = ACTIONS.index(t.action)
 
             # get all symmetries
@@ -416,6 +431,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if last_game_state["round"] % STORE_FREQ == 0:
         store(self)
     self.transitions = deque(maxlen=None)
+
 
 def store(self):
     """

@@ -5,10 +5,10 @@ import numpy as np
 from random import shuffle
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-EPSILON_MAX = 0.1
-EPSILON_MIN = 0.025
-EPSILON_DECAY = 0.9999
-# EPSILON_MIN reached after about 3000 its
+EPSILON_MAX = 0.2
+EPSILON_MIN = 0.08#0.025
+EPSILON_DECAY = 0.9997
+# EPSILON_MIN reached after about 7000 its
 
 
 def setup(self):
@@ -46,8 +46,7 @@ def setup(self):
         print("Loading model.")
         with open(f"model{self.model_suffix}/model.pt", "rb") as file:
             self.Q = pickle.load(file)
-        print("WARNING: Cant use EPSILON_DECAY.. using EPSILON_MIN")
-        self.epsilon = EPSILON_MIN
+
 
 
 def act(self, game_state: dict) -> str:
@@ -149,8 +148,10 @@ def state_to_features(game_state: dict) -> np.array:
     # compute save (danger level for nearest bombs)
     bombs = game_state["bombs"]
     free_space = game_state["field"] == 0
-    for bomb in bombs:
+    for bomb in bombs: # TODO: gegnerposition entfernen
         free_space[tuple(bomb[0])] = False
+    for other in game_state["others"]:
+        free_space[tuple(other[3])] = False
 
     start = game_state["self"][3]
 
@@ -271,7 +272,7 @@ def state_to_features(game_state: dict) -> np.array:
     # compute POI vector and dist
     dist = POI_position - np.array(game_state["self"][3])
     POI_vector = np.sign(dist)
-    if dist[0] == dist[1]:
+    if dist[0] != dist[1]:
         bigger = np.argmax(np.abs(dist))
         POI_vector[bigger] *= 2
     POI_vector += 2
@@ -287,13 +288,13 @@ def state_to_features(game_state: dict) -> np.array:
                 manhattan_min = manhattan
         dist = other[3] - np.array(game_state["self"][3])
         NEY_vector = np.sign(dist)
-        if dist[0] == dist[1]:
+        if dist[0] != dist[1]:
             bigger = np.argmax(np.abs(dist))
             NEY_vector[bigger] *= 2
         NEY_vector += 2
         NEY_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=1)-1  #01234 # 0123
     else:
-        NEY_position = game_state["self"][3]
+        NEY_vector = [2,2]
         NEY_dist = 0  # TODO: Verwirrung II
 
     bomb_left = int(game_state["self"][2])
