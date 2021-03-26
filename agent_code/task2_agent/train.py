@@ -468,17 +468,17 @@ def updateQ(self):
                     Y = sum(r) + GAMMA ** n * np.max(predictions[occ_pointer + i + n])
                     # Y = sum(r) + GAMMA ** n * np.max(self.regressor.predict(occ[i + n][0]))  # old
                 else:
-                    print("SOMETHINGS ROTTON IN updateQ()")
+                    print("SOMETHING'S ROTTON IN updateQ()")
                 # if t.next_state is not None:  # old
                 #     Y = t.reward + GAMMA * np.max(self.regressor.predict(t.next_state))
                 # else:
                 #     Y = t.reward
                 ys.append(Y)
                 xas.append(rot)
-                # for a in range(len(ACTIONS)): # just don't want to bother with this now # TODO: reactivate this
-                #     if a != rot[-1]:
-                #         ys.append(self.regressor.predict(t[0])[a])
-                #         xas.append(np.concatenate((rot[:-1], [a])))
+                for a in range(len(ACTIONS)):
+                    if a != rot[-1]:
+                        ys.append(predictions[occ_pointer+i+n-1, a])        # TODO: really this state not the next?
+                        xas.append(np.concatenate((rot[:-1], [a])))
         occ_pointer += occ_l
 
     xas = np.array(xas)
