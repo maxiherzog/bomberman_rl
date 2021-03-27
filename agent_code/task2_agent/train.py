@@ -109,6 +109,12 @@ def setup_training(self):
             self.analysis_data = pickle.load(file)
 
     else:
+        if "AUTOTRAIN" in os.environ:
+            if os.environ["AUTOTRAIN"] == "YES":
+                global ALPHA, GAMMA
+                ALPHA = float(os.environ["ALPHA"])
+                GAMMA = float(os.environ["GAMMA"])
+
         self.logger.debug("Initializing Q")
         Q = np.zeros([2, 2, 2, 2, 5, 5, 2, 2, 5, len(ACTIONS)])
 
@@ -214,7 +220,7 @@ def setup_training(self):
                                                         ]
                                                     )
 
-        self.regress = True    # switch this here to decide which one you want to train from scratch!
+        self.regress = False    # switch this here to decide which one you want to train from scratch!
         if self.regress:
             print("train a new regression based Forest")
             self.logger.info("train a new regression based Forest.")

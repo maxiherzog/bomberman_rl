@@ -6,11 +6,15 @@ Created on Mon Mar 22 03:03:23 2021
 """
 
 import os
+import subprocess
 
-ROUNDS = 3000
+ROUNDS = 200
 # os.system('cd ../..')
 # os.system(f'python main.py play --agents task2_agent --no-gui --n-rounds {ROUNDS}')
 import sys
+import gc
+
+
 
 AGENT = "task2_agent"
 # ALL_MODELS = True
@@ -25,7 +29,7 @@ GAMMAS = [0.9, 0.95, 0.99]
 #                 model = file[6:]
 #                 if not model.startswith("_") and model not in MODELS:
 #                     MODELS.append(model)
-sys.argv = [
+args = [
     "main.py",
     "play",
     "--agents",
@@ -37,15 +41,26 @@ sys.argv = [
     "1"
 ]
 
+sys.argv = args
+command_str = "python "
+for s in args:
+    command_str += s+" "
+print(command_str)
+
+
 for gamma in GAMMAS:
     for alpha in ALPHAS:
         os.environ["AUTOTRAIN"] = "YES"
         os.environ["ALPHA"] = str(alpha)
         os.environ["GAMMA"] = str(gamma)
         print("alpha", alpha, ";gamma", gamma)
-        exec(open("main.py").read())
-        rootdir = f"agent_code/{AGENT}/model"
-        # model ordner umbenennen!
-        os.rename(rootdir, f"agent_code/{AGENT}/model_A{alpha}-G{gamma}")
+        res = os.system(command_str)
+        if res == 0:
+            rootdir = f"agent_code/{AGENT}/model"
+            # model ordner umbenennen!
+            os.rename(rootdir, f"agent_code/{AGENT}/model_A{alpha}-G{gamma}")
+            gc.collect()
+        else:
+            raise
 
 os.environ["AUTOTRAIN"] = "NO"
