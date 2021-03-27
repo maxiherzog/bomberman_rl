@@ -46,7 +46,9 @@ for name in MODELS:
                 ) / np.array(results["total_crates"])
                 dists.append(dist)
                 winrate = np.count_nonzero(dist == 1) / len(dist)
-                labels.append(f"{name}, wr: {round(winrate*100,1)}%")
+                ALPHA = name.split("-")[0]
+                GAMMA = name.split("-")[1]
+                labels.append(f"{ALPHA}\n{GAMMA}\n wr: {round(winrate*100,1)}%")
                 # names.append(name)
                 print(">%s %.3f (%.3f)" % (name, np.mean(dist), np.std(dist)))
         else:

@@ -263,14 +263,13 @@ def state_to_features(game_state: dict) -> np.array:
             POI_type = 0  # TODO: Verwirrung?
             POI_dist = 0
         else:
-            found = sorted(found_targets, key=lambda tar: tar[2])[0]
-            # print(found)
-            # try:
-            #     found_ind = np.argmin(np.array(found_targets, dtype=object)[:, 2], axis=0)
-            # except:
-            #     print("WTF, encountered weird found_targets: " + str(found_targets))
-            #     found_ind = 0
-            # found = found_targets[found_ind]
+            founds = sorted(found_targets, key=lambda tar: tar[2])
+            for f in founds:
+                if f[1] == 1: #COIN
+                    found = f
+                    break
+            else:
+                found = founds[0]
             POI_position = found[0]
             POI_type = found[1]
     # compute POI vector and dist
