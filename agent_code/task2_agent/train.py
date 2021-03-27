@@ -231,9 +231,6 @@ def setup_training(self):
             ys = np.array(ys)
             self.regressor.fit(xas, ys)
 
-            xas = np.array(xas)
-            ys = np.array(ys)
-            self.regressor.fit(xas, ys)
         else:
             print("train a new non-regression matrix Q")
             self.logger.info("train a new non-regression matrix Q")
