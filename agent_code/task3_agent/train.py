@@ -30,7 +30,7 @@ NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 GAMMA = 0.93
-ALPHA = 0.2
+ALPHA = 0.1
 # N = 1  # for n-step TD Q learning
 # XP_BUFFER_SIZE = 100  # higher batch size for forest
 # N_ESTIMATORS = 100
@@ -39,7 +39,6 @@ ALPHA = 0.2
 
 EXPLOIT_SYMMETRY = True
 GAME_REWARDS = {
-    # HANS
     e.KILLED_OPPONENT: 2,
     e.COIN_COLLECTED: 1,
     e.INVALID_ACTION: -0.1,
@@ -48,35 +47,9 @@ GAME_REWARDS = {
     e.BOMB_DROPPED: 0.02,
     DROPPED_BOMB_NEXT_TO_CRATE: 0.08,
     EVADED_BOMB: 0.1,
-    NO_CRATE_OR_OPPONENT_DESTROYED: -0.5,
+    NO_CRATE_OR_OPPONENT_DESTROYED: -0.7,
     NO_ACTIVE_BOMB: -0.07,
     BLOCKED_SELF_IN_UNSAFE_SPACE: -0.7,
-    # MAXI
-    # e.COIN_COLLECTED: 1,
-    # e.INVALID_ACTION: -1,
-    # BLOCKED_SELF_IN_UNSAFE_SPACE: -10,
-    # e.CRATE_DESTROYED: 0.1,
-    # NO_BOMB: -0.05,
-    # NO_CRATE_OR_OPPONENT_DESTROYED: -3
-    # PHILIPP
-    # e.COIN_COLLECTED: 5,
-    # e.INVALID_ACTION: -0.5,
-    # e.CRATE_DESTROYED: 3,
-    # e.KILLED_SELF: -4,
-    # e.BOMB_DROPPED: 0.05,
-    # NO_BOMB: -0.02,
-    # DROPPED_BOMB_NEXT_TO_CRATE: 0.4,
-    # TÜFTEL
-    # e.COIN_COLLECTED: 1,
-    # # e.KILLED_OPPONENT: 5,
-    # e.INVALID_ACTION: -1,
-    # e.CRATE_DESTROYED: 0.5,
-    # e.BOMB_DROPPED: 0.05,
-    # EVADED_BOMB: 0.25,
-    # NO_BOMB: -0.01,
-    # BLOCKED_SELF_IN_UNSAFE_SPACE: -5,
-    # e.KILLED_SELF: -2,
-    # NO_CRATE_OR_OPPONENT_DESTROYED: -3,
 }
 
 
@@ -115,10 +88,10 @@ def setup_training(self):
         self.Q = np.zeros([2, 2, 2, 2, 2, 5, 5, 2, 2, 5, 5, 4, 2, len(ACTIONS)])
         print(np.prod(self.Q.shape))
 
-        if "AUTOTRAIN" in os.environ:
-            if os.environ["AUTOTRAIN"] == "YES":
-                ALPHA = os.environ["ALPHA"]
-                GAMMA = os.environ["GAMMA"]
+        # if "AUTOTRAIN" in os.environ:
+        #     if os.environ["AUTOTRAIN"] == "YES":
+        #         ALPHA = os.environ["ALPHA"]
+        #         GAMMA = os.environ["GAMMA"]
 
         # (save, POI_vector, [POI_type], [POI_dist], NEY_vector, [NEY_dist], [bomb_left])
         # dont run into walls
@@ -133,10 +106,10 @@ def setup_training(self):
         # # dont drop Bomb when already having one bomb
         self.Q[:, :, :, :, :, :, :, :, :, :, :, :, 0, 5] += -2
         #
-        # dont drop bomb when not near crate
-        self.Q[:, :, :, :, :, :, :, 0, 1, :, :, :, 1, 5] += -1
+        # dont drop bomb when not near crate or enemy
+        self.Q[:, :, :, :, :, :, :, 0, 1, :, :, 3, 1, 5] += -1
         # or near coin
-        self.Q[:, :, :, :, :, :, :, 1, :, :, :, :, 1, 5] += -1
+        self.Q[:, :, :, :, :, :, :, 1, :, :, :, 3, 1, 5] += -1
         # # walk towards crates
         # Q[1, :, :, :, :, :2, 1, 0, 2:, 0] += 1
         # Q[:, 1, :, :, -2:, :, 1, 0, 2:, 1] += 1

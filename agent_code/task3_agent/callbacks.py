@@ -192,6 +192,7 @@ def state_to_features(game_state: dict) -> np.array:
                         if np.sum(np.abs(dist)) < danger_dist_min:
                             danger_dist_min = np.sum(np.abs(dist))
                             most_dangerous_bomb = bomb
+
                 if dist_so_far[current] > most_dangerous_bomb[1]:
                     # print("too far: stopping here", current)
                     continue
@@ -206,7 +207,6 @@ def state_to_features(game_state: dict) -> np.array:
                     if neineighbor not in parent_dict:
                         frontier.append(neineighbor)
                         parent_dict[neineighbor] = neighbor
-                        dist = bombs[0][0] - np.array(neineighbor)
                         dist_so_far[neineighbor] = dist_so_far[current] + 1
                         if not is_dangerous(neineighbor, bombs):
                             save[i] = 1
