@@ -214,14 +214,22 @@ def setup_training(self):
                                                         ]
                                                     )
 
-        self.regress = False    # switch this here to decide which one you want to train from scratch!
+        self.regress = True    # switch this here to decide which one you want to train from scratch!
         if self.regress:
-            print("train a new regression based GradientBoostingForest")
-            self.logger.info("train a new regression based GradientBoostingForest.")
-            prior = QMatrix(Q)
-            self.regressor = GradientBoostingForest(
-                n_features=9, random_state=0, base=prior, first_weight=0.1, mu=0.5
+            print("train a new regression based Forest")
+            self.logger.info("train a new regression based Forest.")
+
+            # prior = QMatrix(Q)
+            # self.regressor = GradientBoostingForest(
+            #     n_features=9, random_state=0, base=prior, first_weight=0.1, mu=0.5
+            # )
+
+            self.regressor = Forest(
+                9, n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
             )
+            xas = np.array(xas)
+            ys = np.array(ys)
+            self.regressor.fit(xas, ys)
 
             xas = np.array(xas)
             ys = np.array(ys)
@@ -395,10 +403,12 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if self.rounds_played % XP_BUFFER_SIZE == 0:
         if self.regress:
             updateQ(self)
-        else:
-            updateQMatrix(self)
-        # clear transitions -> ready for next game
-        self.transitions = deque(maxlen=None)
+            self.transitions = deque(maxlen=None)
+    else:
+        updateQMatrix(self)
+        self.transitions = deque(maxlen=None)   # clear transitions -> ready for next game
+
+
 
     if last_game_state["round"] % STORE_FREQ == 0:
         store(self)
@@ -465,6 +475,7 @@ def updateQ(self):
             self.analysis_data["reward"].append(tot_reward)
             tot_reward = 0
             if s > 0:
+                self.analysis_data["reward"].append(tot_reward)
                 occ_lengths.append(s)
                 s = 0
     if s > 0:
@@ -476,8 +487,10 @@ def updateQ(self):
     ys = []
     xas = []
     states = states[:np.sum(occ_lengths)]  # cut none states
+    actions = actions[:np.sum(occ_lengths)]
+    rewards = rewards[:np.sum(occ_lengths)]
 
-    predictions = self.regressor.predict_vec(states)
+    predictions = np.reshape(self.regressor.predict_vec(states), (-1, 6))
 
     occ_pointer = 0
     for occ_l in occ_lengths:
@@ -495,7 +508,7 @@ def updateQ(self):
                 r = [GAMMA ** k * rewards[occ_pointer + i + k] for k in range(n)]
                 # TODO: Different Y models
                 if states[occ_pointer + i + n] is not None:
-                    Y = sum(r) + GAMMA ** n * np.max(predictions[occ_pointer + i + n])
+                    Y = sum(r) + GAMMA ** n * np.max(predictions[occ_pointer + i + n][actions[occ_pointer + i + n]])
                     # Y = sum(r) + GAMMA ** n * np.max(self.regressor.predict(occ[i + n][0]))  # old
                 else:
                     print("SOMETHING'S ROTTON IN updateQ()")
@@ -507,7 +520,7 @@ def updateQ(self):
                 xas.append(rot)
                 for a in range(len(ACTIONS)):
                     if a != rot[-1]:
-                        ys.append(predictions[occ_pointer+i+n-1, a])        # TODO: really this state not the next?
+                        ys.append(predictions[occ_pointer+i+n-1][actions[occ_pointer+i+n-1]])        # TODO: really this state not the next?
                         xas.append(np.concatenate((rot[:-1], [a])))
         occ_pointer += occ_l
 

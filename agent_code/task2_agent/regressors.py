@@ -132,6 +132,22 @@ class Forest(Regressor):
         returns = self.forest.predict(xa)
         return returns
 
+    def predict_vec(self, feature_vec):
+        # set up response vector
+        response = np.zeros((len(feature_vec), self.n_actions))  # one for each action
+        # combine features and actions to evaluate them separately -> xa
+        Xs = np.tile(feature_vec, (self.n_actions, 1, 1))
+        a = np.reshape(np.arange(self.n_actions), (self.n_actions, 1))
+        b = np.transpose(np.tile(a, (len(feature_vec), 1, 1)), (1, 0, 2))
+
+        xa = np.reshape(np.concatenate((Xs, b), axis=2), (-1, 10))
+
+        # predict response for xa at once
+        response = self.forest.predict(xa)
+
+        return response
+
+
 
 
 class LVA(Regressor):
@@ -200,20 +216,12 @@ class GradientBoostingForest(Regressor):
     def predict_vec(self, feature_vec):
         # set up response vector
         response = np.zeros((len(feature_vec), self.n_actions))  # one for each action
-        # print("response.shape", response.shape)
         # combine features and actions to evaluate them separately -> xa
-        #print("feature_vec.shape", feature_vec.shape)
-        #feature_vec = np.reshape(feature_vec, (-1, 9))
-        #print("feature_vec.shape", feature_vec.shape)
         Xs = np.tile(feature_vec, (self.n_actions, 1, 1))
-        # print("Xs.shape", Xs.shape)
         a = np.reshape(np.arange(self.n_actions), (self.n_actions, 1))
         b = np.transpose(np.tile(a, (len(feature_vec), 1, 1)), (1, 0, 2))
-        # print("a.shape", a.shape)
-        # print("b.shape", b.shape)
 
         xa = np.reshape(np.concatenate((Xs, b), axis=2), (-1, 10))
-        # print("xa.shape", xa.shape)
 
         # for each decision stub in ensemble
         for i, f in enumerate(self.forest):
