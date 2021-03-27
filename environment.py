@@ -325,10 +325,14 @@ class BombeRLeWorld(GenericWorld):
         self.arena[-1:, :] = -1
         self.arena[:, :1] = -1
         self.arena[:, -1:] = -1
+        
+        self.arena[:1, :] = -1
+        
         for x in range(s.COLS):
             for y in range(s.ROWS):
-                if (x + 1) * (y + 1) % 2 == 1:
+                if (x + 1) * (y + 1) % 2== 1:
                     self.arena[x, y] = -1
+
 
         # Starting positions
         start_positions = [(1, 1), (1, s.ROWS - 2), (s.COLS - 2, 1), (s.COLS - 2, s.ROWS - 2)]
