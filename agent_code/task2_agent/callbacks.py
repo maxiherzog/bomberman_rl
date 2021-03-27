@@ -38,14 +38,36 @@ def setup(self):
             self.last_crates = 0
             print("WARNING: TESTING (perhaps on a different model!)")
     if self.train or not os.path.isfile(f"model{self.model_suffix}/model.pt"):
+        # train mode or play mode without existing model
+        if os.path.isfile(f"model{self.model_suffix}/model.pt"):
+            with open(f"model{self.model_suffix}/model.pt", "rb") as file:
+                self.model = pickle.load(file)
+                if type(self.model) == np.array:
+                    self.regress = False
+                    print(type(self.model))
+                    self.Q = self.model
+                else:
+                    self.regress = True
+                    print(type(self.model))
+                    self.regressor = self.model
+
         self.logger.info("Setting up model from scratch.")
         # self.regressor = Regressor(8)
         self.epsilon = EPSILON_MAX
     else:
+        # play mode with existing model
         self.logger.info("Loading model.")
         print("Loading model.")
         with open(f"model{self.model_suffix}/model.pt", "rb") as file:
-            self.regressor = pickle.load(file)
+            self.model = pickle.load(file)
+            if type(self.model) == np.array:
+                self.regress = False
+                print(type(self.model))
+                self.Q = self.model
+            else:
+                self.regress = True
+                print(type(self.model))
+                self.regressor = self.model
         print("WARNING: Cant use EPSILON_DECAY.. using EPSILON_MIN")
         self.epislon = EPSILON_MIN
 
@@ -88,7 +110,10 @@ def act(self, game_state: dict) -> str:
         return np.random.choice(ACTIONS)
 
     # start = time.time()
-    Qs = self.regressor.predict(feat.reshape(1, -1))
+    if self.regress:
+        Qs = self.regressor.predict(feat.reshape(1, -1))
+    else:
+        Qs = self.Q[tuple(feat)]
     self.logger.debug("Qs for this situation: " + str(Qs))
     action_index = np.random.choice(np.flatnonzero(Qs == np.max(Qs)))
     # self.logger.debug("Choosing an action took " + str((time.time() - start)) + "ms.")
