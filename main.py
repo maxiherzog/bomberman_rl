@@ -81,7 +81,7 @@ def main(argv = None):
             args.continue_without_training = True
         if args.my_agent:
             agents.append((args.my_agent, len(agents) < args.train))
-            args.agents = ["peaceful_agent"] * (s.MAX_AGENTS - 1)#["rule_based_agent"] * (s.MAX_AGENTS - 1)
+            args.agents = ["rule_based_agent"] * (s.MAX_AGENTS - 1)#["rule_based_agent"] * (s.MAX_AGENTS - 1)
         for agent_name in args.agents:
             agents.append((agent_name, len(agents) < args.train))
 
