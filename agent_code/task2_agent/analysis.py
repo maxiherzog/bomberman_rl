@@ -40,12 +40,15 @@ def average_every(x, w):
 BATCHES = 20
 
 MODELS = []
+parameters = []
 for file in os.listdir("."):
     if os.path.isdir(file):
         if file.startswith("model_A"):
             model = file[6:]
             if not model.startswith("_") and model not in MODELS:
                 MODELS.append(model)
+                a, g = model.split("-")
+                parameters.append((float(a[1:]), float(g[1:])))
 
 key = ["reward", "crates", "coins", "length", "bombs", "useless_bombs"]
 print(key)
@@ -67,7 +70,7 @@ axis = [
     "Number of Bombs That Did Not Destroy Any Crates",
 ]
 
-for MODEL in MODELS:
+for m, MODEL in enumerate(MODELS):
     print(MODEL)
     # ensure analysis subfolder
     if not os.path.exists(f"model_{MODEL}/plots"):
@@ -124,6 +127,7 @@ for MODEL in MODELS:
             plt.ylabel(axis[i])
             plt.legend(loc="best")
             plt.title(title[i])
+            plt.suptitle(fr" $\alpha={parameters[m][0]} $ $\gamma={parameters[m][1]}$")
             plt.savefig(f"model_{MODEL}/plots/{key[i]}.pdf")
             plt.show()
         # PLOT Qsum

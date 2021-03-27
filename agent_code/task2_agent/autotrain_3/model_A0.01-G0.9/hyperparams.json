@@ -1,0 +1,27 @@
+{
+    "GAMMA": 0.9,
+    "EPSILON_GREEDY": {
+        "EPSILON_MAX": 0.5,
+        "EPSILON_MIN": 0.025,
+        "EPSILON_DECAY": 0.999
+    },
+    "XP_BUFFER_SIZE": 100,
+    "N": 1,
+    "EXPLOIT_SYMMETRY": true,
+    "REGRESSION TREE": {
+        "N_ESTIMATORS": 100,
+        "MAX_DEPTH": 40
+    },
+    "GAME_REWARDS": {
+        "COIN_COLLECTED": 1,
+        "INVALID_ACTION": -0.1,
+        "CRATE_DESTROYED": 0.5,
+        "KILLED_SELF": -0.5,
+        "BOMB_DROPPED": 0.02,
+        "DROPPED_BOMB_NEXT_TO_CRATE": 0.03,
+        "EVADED_BOMB": 0.1,
+        "NO_CRATE_DESTROYED": -0.3,
+        "NO_ACTIVE_BOMB": -0.005,
+        "BLOCKED_SELF_IN_UNSAFE_SPACE": -0.3
+    }
+}
