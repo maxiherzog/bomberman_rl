@@ -8,7 +8,7 @@ Created on Mon Mar 22 03:03:23 2021
 import os
 import subprocess
 
-ROUNDS = 200
+ROUNDS = 10000
 # os.system('cd ../..')
 # os.system(f'python main.py play --agents task2_agent --no-gui --n-rounds {ROUNDS}')
 import sys
@@ -18,7 +18,7 @@ import gc
 
 AGENT = "task2_agent"
 # ALL_MODELS = True
-ALPHAS = [0.1, 0.01, 0.001]
+ALPHAS = [0.1, 0.01, 0.005, 0.001]
 GAMMAS = [0.9, 0.95, 0.99]
 
 # if ALL_MODELS:

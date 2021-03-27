@@ -60,7 +60,7 @@ def setup(self):
         print("Loading model.")
         with open(f"model{self.model_suffix}/model.pt", "rb") as file:
             self.model = pickle.load(file)
-            if type(self.model) == np.array:
+            if type(self.model) == np.ndarray:
                 self.regress = False
                 print(type(self.model))
                 self.Q = self.model
@@ -87,7 +87,6 @@ def act(self, game_state: dict) -> str:
     self.logger.debug(
         "Querying model for action with feature " + str(tuple(feat)) + "."
     )
-
     # TEST BENCH CODE
     if "TESTING" in os.environ:
         if os.environ["TESTING"] == "YES":
