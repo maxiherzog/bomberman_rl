@@ -8,7 +8,7 @@ Created on Mon Mar 22 03:03:23 2021
 import os
 import subprocess
 
-ROUNDS = 10000
+ROUNDS = 600
 # os.system('cd ../..')
 # os.system(f'python main.py play --agents task2_agent --no-gui --n-rounds {ROUNDS}')
 import sys
@@ -18,8 +18,11 @@ import gc
 
 AGENT = "task2_agent"
 # ALL_MODELS = True
-ALPHAS = [0.1, 0.01, 0.005, 0.001]
-GAMMAS = [0.9, 0.95, 0.99]
+ALPHAS = [0.01, 0.001]
+GAMMAS = [0.7, 0.8, 0.9]
+EPSILON_MAX = 0.025
+EPSILON_MIN = 0.025
+EPSILON_DECAY = 1
 
 # if ALL_MODELS:
 #     rootdir = f"agent_code/{AGENT}"
@@ -53,6 +56,9 @@ for gamma in GAMMAS:
         os.environ["AUTOTRAIN"] = "YES"
         os.environ["ALPHA"] = str(alpha)
         os.environ["GAMMA"] = str(gamma)
+        os.environ["EPSILON_MIN"] = str(EPSILON_MIN)
+        os.environ["EPSILON_MAX"] = str(EPSILON_MAX)
+        os.environ["EPSILON_DECAY"] = str(EPSILON_DECAY)
         print("alpha", alpha, ";gamma", gamma)
         res = os.system(command_str)
         if res == 0:

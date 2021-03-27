@@ -37,6 +37,12 @@ def setup(self):
             self.total_crates = 0
             self.last_crates = 0
             print("WARNING: TESTING (perhaps on a different model!)")
+    if "AUTOTRAIN" in os.environ:
+        if os.environ["AUTOTRAIN"] == "YES":
+            global ALPHA, GAMMA, EPSILON_MAX, EPSILON_MIN, EPSILON_DECAY
+            EPSILON_MIN = float(os.environ["EPSILON_MIN"])
+            EPSILON_MAX = float(os.environ["EPSILON_MAX"])
+            EPSILON_DECAY = float(os.environ["EPSILON_DECAY"])
     if self.train or not os.path.isfile(f"model{self.model_suffix}/model.pt"):
         # train mode or play mode without existing model
         if os.path.isfile(f"model{self.model_suffix}/model.pt"):
