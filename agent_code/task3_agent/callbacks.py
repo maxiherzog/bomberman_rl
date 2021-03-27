@@ -6,8 +6,8 @@ from random import shuffle
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
 EPSILON_MAX = 0.2
-EPSILON_MIN = 0.08#0.025
-EPSILON_DECAY = 0.9997
+EPSILON_MIN = 0.025
+EPSILON_DECAY = 0.99992
 # EPSILON_MIN reached after about 7000 its
 
 
@@ -64,7 +64,10 @@ def act(self, game_state: dict) -> str:
     self.logger.debug(
         "Querying model for action with feature " + str(tuple(feat)) + "."
     )
-
+    self.logger.debug(f"save:{feat[:5]}")
+    self.logger.debug(f"POI:{feat[5:7]}, type:{feat[7]}, distance:{feat[8]}")
+    self.logger.debug(f"NEY:{feat[9:11]}, distance:{feat[11]}")
+    self.logger.debug(f"bomb:{feat[12]}")
     # TEST BENCH CODE
     if "TESTING" in os.environ:
         if os.environ["TESTING"] == "YES":
@@ -91,7 +94,8 @@ def act(self, game_state: dict) -> str:
     # print(2, 2, 2, 2, 2, 3, 3, 2, 3, 3, 3, 5, len(ACTIONS))
     # print(feat)
     Qs = self.Q[tuple(feat)]
-    self.logger.debug("Qs for this situation: " + str(Qs))
+    self.logger.debug(f"Qs for this situation:{Qs}")
+
     action_index = np.random.choice(np.flatnonzero(Qs == np.max(Qs)))
     # self.logger.debug("Choosing an action took " + str((time.time() - start)) + "ms.")
 
@@ -408,7 +412,7 @@ def flip(index_vector):
         index_vector[8],  # POI distance invariant
         -index_vector[9] + 4,  # NEY vector x->-x
         index_vector[10],  # y->y
-        -index_vector[11], # NEY distance invariant
+        index_vector[11], # NEY distance invariant
         index_vector[12],  # boms_left
         action_index,
     )

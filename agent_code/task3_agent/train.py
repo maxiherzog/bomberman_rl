@@ -29,8 +29,8 @@ NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-GAMMA = 0.93
-ALPHA = 0.1
+GAMMA = 0.90
+ALPHA = 0.05
 # N = 1  # for n-step TD Q learning
 # XP_BUFFER_SIZE = 100  # higher batch size for forest
 # N_ESTIMATORS = 100
@@ -107,9 +107,9 @@ def setup_training(self):
         self.Q[:, :, :, :, :, :, :, :, :, :, :, :, 0, 5] += -2
         #
         # dont drop bomb when not near crate or enemy
-        self.Q[:, :, :, :, :, :, :, 0, 1, :, :, 3, 1, 5] += -1
+        self.Q[:, :, :, :, :, :, :, 0, 1, :, :, 3, 1, 5] += -2
         # or near coin
-        self.Q[:, :, :, :, :, :, :, 1, :, :, :, 3, 1, 5] += -1
+        self.Q[:, :, :, :, :, :, :, 1, :, :, :, 3, 1, 5] += -2
         # # walk towards crates
         # Q[1, :, :, :, :, :2, 1, 0, 2:, 0] += 1
         # Q[:, 1, :, :, -2:, :, 1, 0, 2:, 1] += 1
@@ -123,10 +123,10 @@ def setup_training(self):
         # Q[:, :, :, 1, :2, :, 1, 1, :, 3] += 1
 
         # walk away if not on save tile (only if safe)
-        self.Q[1, :, :, :, 0, :, :, :, :, :, :, :, :, 0] += 2
-        self.Q[:, 1, :, :, 0, :, :, :, :, :, :, :, :, 1] += 2
-        self.Q[:, :, 1, :, 0, :, :, :, :, :, :, :, :, 2] += 2
-        self.Q[:, :, :, 1, 0, :, :, :, :, :, :, :, :, 3] += 2
+        self.Q[1, :, :, :, 0, :, :, :, :, :, :, :, :, 0] += 3
+        self.Q[:, 1, :, :, 0, :, :, :, :, :, :, :, :, 1] += 3
+        self.Q[:, :, 1, :, 0, :, :, :, :, :, :, :, :, 2] += 3
+        self.Q[:, :, :, 1, 0, :, :, :, :, :, :, :, :, 3] += 3
 
         # and dont fucking WAIT
         self.Q[:, :, :, :, 0, :, :, :, :, :, :, :, :, 4] += -2

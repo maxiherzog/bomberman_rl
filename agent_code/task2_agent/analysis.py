@@ -17,7 +17,7 @@ mpl.rcParams["axes.prop_cycle"] = cycler(
 )
 
 ############################################
-MODEL = ""
+
 
 
 def moving_average(x, w):
@@ -39,6 +39,14 @@ def average_every(x, w):
 
 BATCHES = 20
 
+MODELS = []
+for file in os.listdir("."):
+    if os.path.isdir(file):
+        if file.startswith("model_A"):
+            model = file[6:]
+            if not model.startswith("_") and model not in MODELS:
+                MODELS.append(model)
+
 key = ["reward", "crates", "coins", "length", "bombs", "useless_bombs"]
 print(key)
 title = [
@@ -59,89 +67,92 @@ axis = [
     "Number of Bombs That Did Not Destroy Any Crates",
 ]
 
-# ensure analysis subfolder
-if not os.path.exists(f"model{MODEL}/plots"):
-    os.makedirs(f"model{MODEL}/plots")
+for MODEL in MODELS:
+    print(MODEL)
+    # ensure analysis subfolder
+    if not os.path.exists(f"model_{MODEL}/plots"):
+        os.makedirs(f"model_{MODEL}/plots")
 
-with open(f"model{MODEL}/analysis_data.pt", "rb") as file:
+    with open(f"model_{MODEL}/analysis_data.pt", "rb") as file:
 
-    analysis_data = pickle.load(file)
-    wins = None
-    # print(analysis_data)
-    if "win" in analysis_data.keys():
-        
-        wins = np.array(analysis_data["win"])
-        print("winrate",  round(np.count_nonzero(wins)/len(wins)*100,3), "%")
+        analysis_data = pickle.load(file)
+        wins = None
+        # print(analysis_data)
+        if "win" in analysis_data.keys():
 
-    for i in range(len(key)):
-        data = np.array(analysis_data[key[i]])
-        if wins is not None:
-            plt.plot(
-                data[~wins],
-                "x",
-                alpha=0.2,
-                label="data points",
-                markersize=2,
-            )
-        else:
-            plt.plot(
-                data, "x", alpha=0.2, label="data points", markersize=2
-            )
+            wins = np.array(analysis_data["win"])
+            print("winrate",  round(np.count_nonzero(wins)/len(wins)*100,3), "%")
+        for i in range(len(key)):
+            data = np.array(analysis_data[key[i]])
+            if wins is not None:
+                plt.plot(
+                    np.arange(len(data))[~wins],
+                    data[~wins],
+                    "x",
+                    alpha=0.2,
+                    label="data points",
+                    markersize=2,
+                )
+            else:
+                plt.plot(
+                    data, "x", alpha=0.2, label="data points", markersize=2
+                )
 
-        if BATCHES != 1:
-            arr = average_every(
-                data,
-                int(len(data) / BATCHES) + 1,
-            )
-            plt.plot(
-                np.arange(len(arr)) * len(data) / len(arr)
-                + len(data) / BATCHES / 2,
-                arr,
-                label=f"average (batch size={int(len(analysis_data[key[i]])/BATCHES)})",
-            )
+            if BATCHES != 1:
+                arr = average_every(
+                    data,
+                    int(len(data) / BATCHES) + 1,
+                )
+                plt.plot(
+                    np.arange(len(arr)) * len(data) / len(arr)
+                    + len(data) / BATCHES / 2,
+                    arr,
+                    label=f"average (batch size={int(len(analysis_data[key[i]])/BATCHES)})",
+                )
 
-        if wins is not None:
-            plt.plot(
-                data[wins],
-                "x",
-                alpha=0.2,
-                label="data points wins",
-                markersize=2,
-            )
+            if wins is not None:
+                plt.plot(
+                    np.arange(len(data))[wins],
+                    data[wins],
+                    "x",
+                    alpha=0.2,
+                    label="data points wins",
+                    markersize=2,
+                )
 
-        plt.xlabel("Episode")
-        plt.ylabel(axis[i])
-        plt.legend(loc="best")
-        plt.title(title[i])
-        plt.savefig(f"model{MODEL}/plots/{key[i]}.pdf")
-        plt.show()
-    # PLOT Qsum
-    # name = ["", "_move", "_bomb", "_wait"]
-    # title = ["mean", "moving", "placing a bomb", "waiting"]
-    # for i in range(len(name)):
-    #
-    #
-    #     if name[i]=="":
-    #         Q = np.array(Q)/6
-    #     plt.plot(Q, label=title[i])
-    if "Q_sum" in analysis_data:
-        Qsum = analysis_data["Q_sum"]
-        plt.plot(Qsum)
-        plt.xlabel("Episode")
-        plt.ylabel("$\Sigma_{\{(s, a)\}}Q_{(s,a)}$")
-        plt.title("Sum of All $Q$ Values")
-        plt.savefig(f"model{MODEL}/plots/Qsum.pdf")
-        plt.show()
+            plt.xlabel("Episode")
+            plt.ylabel(axis[i])
+            plt.legend(loc="best")
+            plt.title(title[i])
+            plt.savefig(f"model_{MODEL}/plots/{key[i]}.pdf")
+            plt.show()
+        # PLOT Qsum
+        # name = ["", "_move", "_bomb", "_wait"]
+        # title = ["mean", "moving", "placing a bomb", "waiting"]
+        # for i in range(len(name)):
+        #
+        #
+        #     if name[i]=="":
+        #         Q = np.array(Q)/6
+        #     plt.plot(Q, label=title[i])
+        if "Q_sum" in analysis_data:
+            Qsum = analysis_data["Q_sum"]
+            plt.plot(Qsum)
+            plt.xlabel("Episode")
+            plt.ylabel("$\Sigma_{\{(s, a)\}}Q_{(s,a)}$")
+            plt.title("Sum of All $Q$ Values")
+            plt.savefig(f"model_{MODEL}/plots/Qsum.pdf")
+            plt.show()
 
-    # PLOT Q for one situation
-    # ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-    # Qsit = np.asmatrix(analysis_data["Q_situation"])
-    # print(Qsit)
-    # for i in range(Qsit.shape[1]):
-    #     plt.plot(Qsit[:,i], label=ACTIONS[i])
-    # plt.xlabel("episode")
-    # plt.ylabel("$\Sigma_{\{(s, a)\}}Q_{(s,a)}$")
-    # plt.title("sum of all Q values for different actions for the given starting situation")
-    # plt.legend()
-    # plt.savefig("model/plots/Qsit.pdf")
-    # plt.show()
+        # PLOT Q for one situation
+        # ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
+        # Qsit = np.asmatrix(analysis_data["Q_situation"])
+        # print(Qsit)
+        # for i in range(Qsit.shape[1]):
+        #     plt.plot(Qsit[:,i], label=ACTIONS[i])
+        # plt.xlabel("episode")
+        # plt.ylabel("$\Sigma_{\{(s, a)\}}Q_{(s,a)}$")
+        # plt.title("sum of all Q values for different actions for the given starting situation")
+        # plt.legend()
+        # plt.savefig("model/plots/Qsit.pdf")
+        # plt.show()
