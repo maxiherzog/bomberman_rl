@@ -14,6 +14,8 @@ from .callbacks import EPSILON_MIN
 from .callbacks import EPSILON_DECAY
 import numpy as np
 from .regressors import Forest
+from .regressors import GradientBoostingForest
+from .regressors import QMatrix
 
 Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
 
@@ -30,11 +32,11 @@ NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 GAMMA = 0.93
+ALPHA = 0.2
 N = 1  # for n-step TD Q learning
 XP_BUFFER_SIZE = 100  # higher batch size for forest
 N_ESTIMATORS = 100
 MAX_DEPTH = 40
-
 
 EXPLOIT_SYMMETRY = True
 GAME_REWARDS = {
@@ -78,7 +80,6 @@ GAME_REWARDS = {
     # NO_CRATE_DESTROYED: -3,
 }
 
-
 STORE_FREQ = XP_BUFFER_SIZE
 
 
@@ -95,14 +96,13 @@ def setup_training(self):
     self.transitions = deque(maxlen=None)  #
     self.rounds_played = 0
 
+    #self.regress = False
     # ensure model subfolder
     if not os.path.exists("model"):
         os.makedirs("model")
 
     if os.path.isfile("model/model.pt"):
         self.logger.info("Retraining from saved state.")
-        with open("model/model.pt", "rb") as file:
-            self.regressor = pickle.load(file)
 
         self.logger.info("Reloading analysis variables.")
         with open("model/analysis_data.pt", "rb") as file:
@@ -156,9 +156,10 @@ def setup_training(self):
         # but consider waiting if safe/dead
         Q[0, 0, 0, 0, :, :, 0, 0, :, 4] += 2
 
-        xas = []  #  gamestate and action as argument
+        xas = []  # gamestate and action as argument
         ys = []  # target response
 
+        # set up prior matrix
         for i0 in range(Q.shape[0]):
             for i1 in range(Q.shape[1]):
                 for i2 in range(Q.shape[2]):
@@ -170,19 +171,19 @@ def setup_training(self):
                                         for i8 in range(Q.shape[8]):
                                             for a in range(Q.shape[8]):
                                                 if (
-                                                    Q[
-                                                        i0,
-                                                        i1,
-                                                        i2,
-                                                        i3,
-                                                        i4,
-                                                        i5,
-                                                        i6,
-                                                        i7,
-                                                        i8,
-                                                        a,
-                                                    ]
-                                                    != 0
+                                                        Q[
+                                                            i0,
+                                                            i1,
+                                                            i2,
+                                                            i3,
+                                                            i4,
+                                                            i5,
+                                                            i6,
+                                                            i7,
+                                                            i8,
+                                                            a,
+                                                        ]
+                                                        != 0
                                                 ):
                                                     xas.append(
                                                         [
@@ -212,21 +213,33 @@ def setup_training(self):
                                                             a,
                                                         ]
                                                     )
-        # self.regressor = Network(8)
-        self.regressor = Forest(
-            9, n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
-        )
-        # print(
-        #     "Fitting forest.. dofs:",
-        #     2 ** MAX_DEPTH * N_ESTIMATORS,
-        #     "vs.",
-        #     np.prod(Q.shape),
-        # )
-        xas = np.array(xas)
-        ys = np.array(ys)
-        # print("Fitting xas", xas.shape, "ys", ys.shape)
-        self.regressor.fit(xas, ys)
-        # print(self.forest.predict(np.reshape([0, 0, 0, 0, 0, 0, 0, 0, 4], (1, -1))))
+
+        self.regress = True    # switch this here to decide which one you want to train from scratch!
+        if self.regress:
+            print("train a new regression based Forest")
+            self.logger.info("train a new regression based Forest.")
+
+            # prior = QMatrix(Q)
+            # self.regressor = GradientBoostingForest(
+            #     n_features=9, random_state=0, base=prior, first_weight=0.1, mu=0.5
+            # )
+
+            self.regressor = Forest(
+                9, n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
+            )
+            xas = np.array(xas)
+            ys = np.array(ys)
+            self.regressor.fit(xas, ys)
+
+            xas = np.array(xas)
+            ys = np.array(ys)
+            self.regressor.fit(xas, ys)
+        else:
+            print("train a new non-regression matrix Q")
+            self.logger.info("train a new non-regression matrix Q")
+            self.Q = Q
+
+
         # init measured variables
         self.analysis_data = {
             # "Q_sum": [],
@@ -254,7 +267,7 @@ def setup_training(self):
             "XP_BUFFER_SIZE": XP_BUFFER_SIZE,
             "N": N,
             "EXPLOIT_SYMMETRY": EXPLOIT_SYMMETRY,
-            "REGRESSION TREE": {"N_ESTIMATORS": N_ESTIMATORS, "MAX_DEPTH": MAX_DEPTH,},
+            "REGRESSION TREE": {"N_ESTIMATORS": N_ESTIMATORS, "MAX_DEPTH": MAX_DEPTH, },
             "GAME_REWARDS": GAME_REWARDS,
         }
         with open("model/hyperparams.json", "w") as file:
@@ -270,11 +283,11 @@ def setup_training(self):
 
 
 def game_events_occurred(
-    self,
-    old_game_state: dict,
-    self_action: str,
-    new_game_state: dict,
-    events: List[str],
+        self,
+        old_game_state: dict,
+        self_action: str,
+        new_game_state: dict,
+        events: List[str],
 ):
     """
     Called once per step to allow intermediate rewards based on game events.
@@ -387,10 +400,15 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.useless_bombs_counter = 0
 
     self.rounds_played += 1
-    if self.rounds_played % XP_BUFFER_SIZE == 0:
-        updateQ(self)
-        # clear transitions -> ready for next game
-        self.transitions = deque(maxlen=None)
+    if self.regress:
+        if self.rounds_played % XP_BUFFER_SIZE == 0:
+            updateQ(self)
+            self.transitions = deque(maxlen=None)
+    else:
+        updateQMatrix(self)
+        self.transitions = deque(maxlen=None)   # clear transitions -> ready for next game
+
+
 
     if last_game_state["round"] % STORE_FREQ == 0:
         store(self)
@@ -403,51 +421,107 @@ def store(self):
     # Store the model
     self.logger.debug("Storing model.")
     with open(r"model/model.pt", "wb") as file:
-        pickle.dump(self.regressor, file)
+        if self.regress:
+            pickle.dump(self.regressor, file)
+        else:
+            pickle.dump(self.Q, file)
     with open("model/analysis_data.pt", "wb") as file:
         pickle.dump(self.analysis_data, file)
 
+def updateQMatrix(self):
+    tot_reward = 0
+    for t in self.transitions:
+        if t.action != None:
+            tot_reward += t.reward
+
+            if t.next_state is None:
+                V = 0
+            else:
+                V = np.max(self.Q[tuple(t.next_state)])  # TODO: SARSA vs Q-Learning V
+            action_index = ACTIONS.index(t.action)
+
+            # get all symmetries
+            origin_vec = np.concatenate((t.state, [action_index]))
+            for rot in get_all_rotations(origin_vec):
+                self.Q[tuple(rot)] += ALPHA * (
+                    t.reward + GAMMA * V - self.Q[tuple(origin_vec)]
+                )
+    self.analysis_data["reward"].append(tot_reward)
 
 def updateQ(self):
     batch = []
+    occ_lengths = []  # for later slicing
     occasion = []  # storing transitions in occasions to reflect their context
     # measure reward
     tot_reward = 0
-    for t in self.transitions:
+    n_features = 9
+    states = np.ones((len(self.transitions), n_features), dtype=int)  # slightly too long still due to none states
+    actions = np.ones((len(self.transitions)), dtype=int)
+    rewards = np.ones((len(self.transitions)))
+    cs = 0
+    s = 0
+    for i, t in enumerate(self.transitions):
+
         if t.state is not None:
+            states[cs, :] = t.state
+            actions[cs] = ACTIONS.index(t.action)
+            rewards[cs] = t.reward
             tot_reward += t.reward
-            occasion.append(t)  # TODO: prioritize interesting transitions
+            cs += 1
+            s += 1
+            # TODO: prioritize interesting transitions
+
         else:
-            self.analysis_data["reward"].append(tot_reward)
             tot_reward = 0
-            batch.append(occasion)
-            occasion = []
+            if s > 0:
+                self.analysis_data["reward"].append(tot_reward)
+                occ_lengths.append(s)
+                s = 0
+    if s > 0:
+        occ_lengths.append(s)
+        self.analysis_data["reward"].append(tot_reward)
+
+    del s, tot_reward
 
     ys = []
     xas = []
-    for occ in batch:
-        np.random.shuffle(occ)
-        for i, t in enumerate(occ):
-            action = [ACTIONS.index(t.action)]
-            rots = get_all_rotations(np.concatenate((t.state, action)))
+    states = states[:np.sum(occ_lengths)]  # cut none states
+    actions = actions[:np.sum(occ_lengths)]
+    rewards = rewards[:np.sum(occ_lengths)]
+
+    predictions = np.reshape(self.regressor.predict_vec(states), (-1, 6))
+
+    occ_pointer = 0
+    for occ_l in occ_lengths:
+
+        for i in range(occ_l):
+
+            action = actions[occ_pointer + i]
+            state = states[occ_pointer + i]
+            rots = get_all_rotations(np.concatenate((state, [action])))
             for rot in rots:
                 # calculate target response Y using n step TD!
-                # n = min(
-                #     len(occ) - i, N
-                # )  # calculate next N steps, otherwise just as far as possible
-                # r = [GAMMA ** k * occ[i + k].reward for k in range(n)]
+                n = min(
+                    occ_l - i - 1, N
+                )  # calculate next N steps, otherwise just as far as possible
+                r = [GAMMA ** k * rewards[occ_pointer + i + k] for k in range(n)]
                 # TODO: Different Y models
-                if t.next_state is not None:
-                    # Y = sum(r) + GAMMA ** n * np.max(Q(self, t.next_state))
-                    Y = t.reward + GAMMA * np.max(self.regressor.predict(t.next_state))
+                if states[occ_pointer + i + n] is not None:
+                    Y = sum(r) + GAMMA ** n * np.max(predictions[occ_pointer + i + n][actions[occ_pointer + i + n]])
+                    # Y = sum(r) + GAMMA ** n * np.max(self.regressor.predict(occ[i + n][0]))  # old
                 else:
-                    Y = t.reward
+                    print("SOMETHING'S ROTTON IN updateQ()")
+                # if t.next_state is not None:  # old
+                #     Y = t.reward + GAMMA * np.max(self.regressor.predict(t.next_state))
+                # else:
+                #     Y = t.reward
                 ys.append(Y)
                 xas.append(rot)
                 for a in range(len(ACTIONS)):
                     if a != rot[-1]:
-                        ys.append(self.regressor.predict(t.state)[a])
+                        ys.append(predictions[occ_pointer+i+n-1][actions[occ_pointer+i+n-1]])        # TODO: really this state not the next?
                         xas.append(np.concatenate((rot[:-1], [a])))
+        occ_pointer += occ_l
 
     xas = np.array(xas)
 
