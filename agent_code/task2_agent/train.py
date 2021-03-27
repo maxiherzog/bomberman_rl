@@ -400,8 +400,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.useless_bombs_counter = 0
 
     self.rounds_played += 1
-    if self.rounds_played % XP_BUFFER_SIZE == 0:
-        if self.regress:
+    if self.regress:
+        if self.rounds_played % XP_BUFFER_SIZE == 0:
             updateQ(self)
             self.transitions = deque(maxlen=None)
     else:
@@ -472,7 +472,6 @@ def updateQ(self):
             # TODO: prioritize interesting transitions
 
         else:
-            self.analysis_data["reward"].append(tot_reward)
             tot_reward = 0
             if s > 0:
                 self.analysis_data["reward"].append(tot_reward)
