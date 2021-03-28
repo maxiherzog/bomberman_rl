@@ -46,7 +46,7 @@ for name in MODELS:
                 # ) / np.array(results["total_crates"])
                 dist = np.array(results["points"])
                 print(len(dist))
-                print(dist)
+                #print(dist)
                 dists.append(dist)
                 # winrate = np.count_nonzero(dist == 1) / len(dist)
                 # labels.append(f"{name}, wr: {round(winrate*100,1)}%")
@@ -57,11 +57,17 @@ for name in MODELS:
     else:
         print(f"FOUND NO MODEL NAMED {name}")
 # plt.style.use('seaborn-whitegrid')
-plt.grid(axis="y")
+plt.grid(alpha=0.2)
 medianprops = dict(linestyle="-", linewidth=2.5, color="firebrick")
-plt.boxplot(dists, showmeans=True, medianprops=medianprops)
-plt.xlabel("Model")
-plt.ylabel("Points")
+#plt.boxplot(dists, showmeans=True, medianprops=medianprops)
+bins = range(min(dists[0]), max(dists[0]) + 1)
+plt.hist(dists[0], bins=bins, label="our agent")
+with open("../rule_based_agent/points.pt", "rb") as file:
+    rule_based = pickle.load(file)
+    plt.hist(rule_based, bins=bins, label="rule based agent",alpha=0.6)
+plt.xlabel("Points")
+plt.ylabel("Games")
+plt.legend()
 plt.title("Points")
 
 # ensure meta/plots subfolder
