@@ -28,7 +28,7 @@ def setup(self):
 
     ### CHANGE ONLY IF YOU KNOW WHAT YOU ARE DOING, no sync with training!
     self.model_suffix = ""
-    self.folder = "autotrain_7/"
+    self.folder = "autotrain_7_longerBench/"
 
     # TEST BENCH CODE
     if "TESTING" in os.environ:
@@ -67,14 +67,12 @@ def setup(self):
             self.model = pickle.load(file)
             if type(self.model) == np.ndarray:
                 self.regress = False
-                print(type(self.model))
                 self.Q = self.model
             else:
                 self.regress = True
-                print(type(self.model))
                 self.regressor = self.model
         print("WARNING: Cant use EPSILON_DECAY.. using EPSILON_MIN")
-        self.epislon = EPSILON_MIN
+        self.epsilon = EPSILON_MIN
 
 
 def act(self, game_state: dict) -> str:
@@ -112,7 +110,6 @@ def act(self, game_state: dict) -> str:
                 pickle.dump(self.test_results, file)
 
     # ->EPSILON greedy
-
     if self.train and random.random() < self.epsilon:
         self.logger.debug("EPSILON-greedy: Choosing action purely at random.")
         return np.random.choice(ACTIONS)

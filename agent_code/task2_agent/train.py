@@ -380,14 +380,14 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.logger.debug(
         f'Encountered event(s) {", ".join(map(repr, events))} in final step'
     )
-    self.transitions.append(
-        Transition(
-            state_to_features(last_game_state),
-            last_action,
-            None,
-            reward_from_events(self, events),
-        )
-    )
+    #self.transitions.append(
+    #    Transition(
+    #        state_to_features(last_game_state),
+    #        last_action,
+    #        None,
+    #        reward_from_events(self, events),
+    #    )
+    #)
 
     self.analysis_data["win"].append(last_game_state["self"][1] == 9)
     self.analysis_data["crates"].append(self.crate_counter)
@@ -405,7 +405,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.rounds_played += 1
     if self.regress:
         if self.rounds_played % XP_BUFFER_SIZE == 0:
-            updateQ(self)
+            #updateQ(self)
             self.transitions = deque(maxlen=None)
     else:
         updateQMatrix(self)

@@ -25,11 +25,11 @@ dists = []
 ALL_MODELS = True
 MODELS = []
 
-folder = "autotrain_7/"
+folder = "autotrain_7_longerBench/"
 
 if ALL_MODELS:
     print(os.listdir(f"{folder}"))
-    for file in os.listdir(f"{folder}"):
+    for file in sorted(os.listdir(f"{folder}")):
         if os.path.isdir(folder+file):
             if file.startswith("model_"):
                 model = file[6:]
@@ -50,6 +50,7 @@ for name in MODELS:
                 #) / np.array(results["total_crates"])
                 try:
                     dist = np.array((results["points"]))
+                    print(len(dist))
                     dists.append(dist)
                     winrate = np.count_nonzero(dist == 9) / len(dist)
                     ALPHA = name.split("-")[0]
