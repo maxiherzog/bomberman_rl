@@ -201,7 +201,7 @@ class GradientBoostingForest(Regressor):
         # calculate residuals rho with prediction of old model
         rho = values - self.predict_vec(features)
         # fit decision stub on residuals of batch
-        stub = DecisionTreeRegressor(max_depth=1, random_state=self.random_state)
+        stub = DecisionTreeRegressor(max_depth=10, random_state=self.random_state)
         stub.fit(features, rho)
 
         # add decision stub to ensemble
