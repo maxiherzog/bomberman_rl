@@ -36,19 +36,23 @@ def average_every(x, w):
     )
     return arr
 
+folder = "autotrain_8/"
 
 BATCHES = 20
 
 MODELS = []
 parameters = []
-for file in sorted(os.listdir(".")):
-    if os.path.isdir(file):
-        if file.startswith("model_A"):
+for file in sorted(os.listdir(f"{folder}")):
+    if os.path.isdir(folder+file):
+        if file.startswith("model_FW"):
             model = file[6:]
             if not model.startswith("_") and model not in MODELS:
                 MODELS.append(model)
                 a, g = model.split("-")
-                parameters.append((float(a[1:]), float(g[1:])))
+
+                parameters.append((float(a[2:]), float(g[2:])))
+
+print(parameters)
 
 key = ["reward", "crates", "coins", "length", "bombs", "useless_bombs"]
 print(key)
@@ -69,15 +73,17 @@ axis = [
     "Amount of Bombs Dropped",
     "Number of Bombs That Did Not Destroy Any Crates",
 ]
-episodes = 3000
-data_collection = -1 * np.ones((len(title), len(MODELS), episodes))
+
+
+episodes = 1000
+data_collection = -1 * np.ones((len(MODELS), len(title), episodes))
 for m, MODEL in enumerate(MODELS):
     print(MODEL)
     # ensure analysis subfolder
-    if not os.path.exists(f"model_{MODEL}/plots"):
-        os.makedirs(f"model_{MODEL}/plots")
+    if not os.path.exists(f"{folder}model_{MODEL}/plots"):
+        os.makedirs(f"{folder}model_{MODEL}/plots")
 
-    with open(f"model_{MODEL}/analysis_data.pt", "rb") as file:
+    with open(f"{folder}model_{MODEL}/analysis_data.pt", "rb") as file:
 
         analysis_data = pickle.load(file)
         wins = None
@@ -85,14 +91,14 @@ for m, MODEL in enumerate(MODELS):
         if "win" in analysis_data.keys():
 
             wins = np.array(analysis_data["win"])
-            print("winrate",  round(np.count_nonzero(wins)/len(wins)*100,3), "%")
+            print("winrate",  round(np.count_nonzero(wins)/len(wins)*100, 3), "%")
         for i in range(len(key)):
             data = np.array(analysis_data[key[i]])
 
             data_collection[m, i, :] = data
 
 
-            plot_every_model_separatly = True
+            plot_every_model_separatly = False
             if plot_every_model_separatly:
                 if wins is not None:
                     plt.plot(
@@ -135,7 +141,7 @@ for m, MODEL in enumerate(MODELS):
                 plt.legend(loc="best")
                 plt.title(title[i])
                 plt.suptitle(fr" $\alpha={parameters[m][0]} $ $\gamma={parameters[m][1]}$")
-                plt.savefig(f"model_{MODEL}/plots/{key[i]}.pdf")
+                plt.savefig(f"{folder}model_{MODEL}/plots/{key[i]}.pdf")
                 plt.show()
             # PLOT Qsum
             # name = ["", "_move", "_bomb", "_wait"]
@@ -152,7 +158,7 @@ for m, MODEL in enumerate(MODELS):
                 plt.xlabel("Episode")
                 plt.ylabel("$\Sigma_{\{(s, a)\}}Q_{(s,a)}$")
                 plt.title("Sum of All $Q$ Values")
-                plt.savefig(f"model_{MODEL}/plots/Qsum.pdf")
+                plt.savefig(f"{folder}model_{MODEL}/plots/Qsum.pdf")
                 plt.show()
 
             # PLOT Q for one situation
@@ -168,26 +174,32 @@ for m, MODEL in enumerate(MODELS):
             # plt.savefig("model/plots/Qsit.pdf")
             # plt.show()
 
-if not os.path.exists("comparison_plots"):
-    os.mkdir("comparison_plots")
+if not os.path.exists(f"{folder}comparison_plots"):
+    os.mkdir(f"{folder}comparison_plots")
 for i in range(len(title)):
     for m in range(len(MODELS)):
-        arr = average_every(
-            data_collection[m, i],
-            int(len(data) / BATCHES) + 1,
-        )
+        if i == 0:  # reward:
+            arr = np.reshape(data_collection[m, i], (-1, 100))[:, -1]/100
+            # pick last of batch of 100s and devide by 100
+            plt.ylabel(f"{axis[i]} (averaged batch size={100})")
+            tauspace = np.arange(len(arr))*100 +50
+        else:       # not reward:
+            plt.ylabel(f"{axis[i]} (averaged batch size={int(len(analysis_data[key[i]]) / BATCHES)})")
+            arr = average_every(
+                data_collection[m, i],
+                int(len(data) / BATCHES) + 1,
+            )
+            tauspace = np.arange(len(arr)) * len(data) / len(arr) + len(data) / BATCHES / 2
         plt.plot(
-            np.arange(len(arr)) * len(data) / len(arr)
-            + len(data) / BATCHES / 2,
+            tauspace,
             arr,
-            label=fr"$\alpha={parameters[m][0]} $ $\gamma={parameters[m][1]}$",
+            label=fr"$w_0={parameters[m][0]} $ $\mu={parameters[m][1]}$",
         )
 
     plt.xlabel("Episode")
-    plt.ylabel(f"{axis[i]} (averaged batch size={int(len(analysis_data[key[i]])/BATCHES)})")
     plt.legend(loc="best")
     plt.title(title[i])
     #plt.suptitle(fr" $\alpha={parameters[m][0]} $ $\gamma={parameters[m][1]}$")
-    plt.savefig(f"comparison_plots/{key[i]}.pdf")
+    plt.savefig(f"{folder}comparison_plots/{key[i]}.pdf")
     plt.show()
 
