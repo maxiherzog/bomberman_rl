@@ -25,11 +25,11 @@ dists = []
 ALL_MODELS = True
 MODELS = []
 
-folder = "autotrain_7/"
+folder = "./"
 
 if ALL_MODELS:
     print(os.listdir(f"{folder}"))
-    for file in os.listdir(f"{folder}"):
+    for file in sorted(os.listdir(f"{folder}")):
         if os.path.isdir(folder+file):
             if file.startswith("model_"):
                 model = file[6:]
@@ -77,5 +77,5 @@ plt.title("Number of Collected Coins for Different Reward Models")
 # ensure meta/plots subfolder
 if not os.path.exists(f"{folder}meta/plots"):
     os.makedirs(f"{folder}meta/plots")
-plt.savefig(f"{folder}meta/plots/{s}crate_percentage_boxplot.pdf")
+plt.savefig(f"{folder}meta/plots/{s}coins_collected_boxplot.pdf")
 plt.show()
