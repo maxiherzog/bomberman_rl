@@ -9,8 +9,8 @@
     "N": 1,
     "EXPLOIT_SYMMETRY": true,
     "REGRESSION TREE": {
-        "N_ESTIMATORS": 100,
-        "MAX_DEPTH": 40
+        "N_ESTIMATORS": 20,
+        "MAX_DEPTH": 10
     },
     "GAME_REWARDS": {
         "COIN_COLLECTED": 1,
