@@ -28,7 +28,7 @@ def setup(self):
 
     ### CHANGE ONLY IF YOU KNOW WHAT YOU ARE DOING, no sync with training!
     self.model_suffix = ""
-    self.folder = "autotrain_7/"
+    self.folder = ""
 
     # TEST BENCH CODE
     if "TESTING" in os.environ:

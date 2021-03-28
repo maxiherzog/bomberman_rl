@@ -405,6 +405,9 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.analysis_data["length"].append(last_game_state["step"])
     self.analysis_data["bombs"].append(self.bombs_counter)
     self.analysis_data["useless_bombs"].append(self.useless_bombs_counter)
+    tot_reward = 0
+    for t in self.transitions:
+        tot_reward += t.reward
     self.analysis_data["reward"].append(tot_reward)
 
     # RESET Counters
@@ -444,7 +447,6 @@ def store(self):
 def updateQMatrix(self):
     for t in self.transitions:
         if t.action != None:
-            tot_reward += t.reward
 
             if t.next_state is None:
                 V = 0
