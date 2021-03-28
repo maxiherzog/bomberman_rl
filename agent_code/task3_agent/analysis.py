@@ -17,7 +17,7 @@ mpl.rcParams["axes.prop_cycle"] = cycler(
 )
 
 ############################################
-MODEL = ""
+MODEL = "_TEST"
 
 
 def moving_average(x, w):
