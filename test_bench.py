@@ -7,23 +7,23 @@ Created on Mon Mar 22 03:03:23 2021
 
 import os
 import gc
-ROUNDS = 100
+ROUNDS = 1000
 # os.system('cd ../..')
 # os.system(f'python main.py play --agents task2_agent --no-gui --n-rounds {ROUNDS}')
 import sys
 
 AGENT = "task2_agent"
 ALL_MODELS = True
-MODELS = []  # ,"HANS_SYM", "PHILIPP"]
+MODELS = ["A0.01-G0.5"]  # ,"HANS_SYM", "PHILIPP"]
 
-if ALL_MODELS:
-    rootdir = f"agent_code/{AGENT}/autotrain_7"
-    for file in os.listdir(rootdir):
-        if os.path.isdir(os.path.join(rootdir, file)):
-            if file.startswith("model_A"):
-                model = file[6:]
-                if not model.startswith("_") and model not in MODELS:
-                    MODELS.append(model)
+# if ALL_MODELS:
+#     rootdir = f"agent_code/{AGENT}/autotrain_7_longerBench"
+#     for file in os.listdir(rootdir):
+#         if os.path.isdir(os.path.join(rootdir, file)):
+#             if file.startswith("model_A"):
+#                 model = file[6:]
+#                 if not model.startswith("_") and model not in MODELS:
+#                     MODELS.append(model)
 args = [
     "main.py",
     "play",
