@@ -31,12 +31,15 @@ NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-GAMMA = 0.93
-ALPHA = 0.2
+GAMMA = 0.6
+ALPHA = 0.01
 N = 1  # for n-step TD Q learning
 XP_BUFFER_SIZE = 100  # higher batch size for forest
 N_ESTIMATORS = 100
 MAX_DEPTH = 40
+
+FIRST_WEIGHT = 0.1
+MU = 0.5
 
 EXPLOIT_SYMMETRY = True
 GAME_REWARDS = {
@@ -96,7 +99,7 @@ def setup_training(self):
     self.transitions = deque(maxlen=None)  #
     self.rounds_played = 0
 
-    #self.regress = False
+    # self.regress = False
     # ensure model subfolder
     if not os.path.exists("model"):
         os.makedirs("model")
@@ -111,9 +114,13 @@ def setup_training(self):
     else:
         if "AUTOTRAIN" in os.environ:
             if os.environ["AUTOTRAIN"] == "YES":
-                global ALPHA, GAMMA
+                global ALPHA, GAMMA, MAX_DEPTH, N_ESTIMATORS, FIRST_WEIGHT
                 ALPHA = float(os.environ["ALPHA"])
                 GAMMA = float(os.environ["GAMMA"])
+                MAX_DEPTH = int(os.environ["MAX_DEPTH"])
+                N_ESTIMATORS = int(os.environ["N_ESTIMATORS"])
+                FIRST_WEIGHT = float(os.environ["FIRST_WEIGHT"])
+                MU = float(os.environ["MU"])
 
         self.logger.debug("Initializing Q")
         Q = np.zeros([2, 2, 2, 2, 5, 5, 2, 2, 5, len(ACTIONS)])
@@ -220,28 +227,31 @@ def setup_training(self):
                                                         ]
                                                     )
 
-        self.regress = False    # switch this here to decide which one you want to train from scratch!
+        self.regress = True  # switch this here to decide which one you want to train from scratch!
         if self.regress:
-            print("train a new regression based Forest")
+            print("train a new regression based BoostingForest")
             self.logger.info("train a new regression based Forest.")
 
-            # prior = QMatrix(Q)
-            # self.regressor = GradientBoostingForest(
-            #     n_features=9, random_state=0, base=prior, first_weight=0.1, mu=0.5
-            # )
-
-            self.regressor = Forest(
-                9, n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
+            prior = QMatrix(Q)
+            self.regressor = GradientBoostingForest(
+                n_features=9, random_state=0, base=prior, first_weight=FIRST_WEIGHT, mu=MU
             )
+
+            # self.regressor = Forest(
+            #     9, n_estimators=N_ESTIMATORS, max_depth=MAX_DEPTH, random_state=0
+            # )
             xas = np.array(xas)
             ys = np.array(ys)
             self.regressor.fit(xas, ys)
+
+            #predictedYs = self.regressor.predict_vec(xas)
+            #print(xas.shape, predictedYs.shape, ys.shape)
+            #print(np.mean(np.abs(ys-predictedYs)))
 
         else:
             print("train a new non-regression matrix Q")
             self.logger.info("train a new non-regression matrix Q")
             self.Q = Q
-
 
         # init measured variables
         self.analysis_data = {
@@ -409,9 +419,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             self.transitions = deque(maxlen=None)
     else:
         updateQMatrix(self)
-        self.transitions = deque(maxlen=None)   # clear transitions -> ready for next game
-
-
+        self.transitions = deque(maxlen=None)  # clear transitions -> ready for next game
 
     if last_game_state["round"] % STORE_FREQ == 0:
         store(self)
@@ -431,6 +439,7 @@ def store(self):
     with open("model/analysis_data.pt", "wb") as file:
         pickle.dump(self.analysis_data, file)
 
+
 def updateQMatrix(self):
     tot_reward = 0
     for t in self.transitions:
@@ -447,9 +456,10 @@ def updateQMatrix(self):
             origin_vec = np.concatenate((t.state, [action_index]))
             for rot in get_all_rotations(origin_vec):
                 self.Q[tuple(rot)] += ALPHA * (
-                    t.reward + GAMMA * V - self.Q[tuple(origin_vec)]
+                        t.reward + GAMMA * V - self.Q[tuple(origin_vec)]
                 )
     self.analysis_data["reward"].append(tot_reward)
+
 
 def updateQ(self):
     batch = []
@@ -492,7 +502,7 @@ def updateQ(self):
     actions = actions[:np.sum(occ_lengths)]
     rewards = rewards[:np.sum(occ_lengths)]
 
-    predictions = np.reshape(self.regressor.predict_vec(states), (-1, 6))
+    predictions = np.reshape(self.regressor.predict_vec_a(states), (-1, 6))
 
     occ_pointer = 0
     for occ_l in occ_lengths:
@@ -522,7 +532,8 @@ def updateQ(self):
                 xas.append(rot)
                 for a in range(len(ACTIONS)):
                     if a != rot[-1]:
-                        ys.append(predictions[occ_pointer+i+n-1][actions[occ_pointer+i+n-1]])        # TODO: really this state not the next?
+                        ys.append(predictions[occ_pointer + i + n - 1][
+                                      actions[occ_pointer + i + n - 1]])  # TODO: really this state not the next?
                         xas.append(np.concatenate((rot[:-1], [a])))
         occ_pointer += occ_l
 

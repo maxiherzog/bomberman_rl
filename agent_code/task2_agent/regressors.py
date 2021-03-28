@@ -31,9 +31,6 @@ class Regressor:
         """Predict value vector with an entry for every possible action."""
         raise NotImplementedError("subclasses must override predict()!")
 
-    # def update(self, transitions):
-    #    raise NotImplementedError("subclasses must override update()!")
-    # this is unused right?
 
 
 class Network(Regressor):
@@ -132,7 +129,7 @@ class Forest(Regressor):
         returns = self.forest.predict(xa)
         return returns
 
-    def predict_vec(self, feature_vec):
+    def predict_vec_a(self, feature_vec):
         # set up response vector
         response = np.zeros((len(feature_vec), self.n_actions))  # one for each action
         # combine features and actions to evaluate them separately -> xa
@@ -146,6 +143,10 @@ class Forest(Regressor):
         response = self.forest.predict(xa)
 
         return response
+
+    def predict_vec(self, feature_vec_with_action):
+        # predict response for all at once
+        return self.forest.predict(feature_vec_with_action)
 
 
 
@@ -198,7 +199,7 @@ class GradientBoostingForest(Regressor):
 
     def fit(self, features, values):
         # calculate residuals rho with prediction of old model
-        rho = values - self.predict_vec_single_action(features)
+        rho = values - self.predict_vec(features)
         # fit decision stub on residuals of batch
         stub = DecisionTreeRegressor(max_depth=1, random_state=self.random_state)
         stub.fit(features, rho)
@@ -207,13 +208,13 @@ class GradientBoostingForest(Regressor):
         self.forest.append(stub)
         self.weights.append(self.first_weight / (1 + self.mu * len(self.forest)))
 
-    def predict_vec_single_action(self, feature_vec_with_action):
+    def predict_vec(self, feature_vec_with_action):
         response = np.zeros(len(feature_vec_with_action))
-        for i, features in enumerate(feature_vec_with_action):
-            response[i] = self.predict(features[:-1])[features[-1]]
+        for i, f in enumerate(self.forest):
+            response += f.predict(feature_vec_with_action)
         return response
 
-    def predict_vec(self, feature_vec):
+    def predict_vec_a(self, feature_vec):
         # set up response vector
         response = np.zeros((len(feature_vec), self.n_actions))  # one for each action
         # combine features and actions to evaluate them separately -> xa
