@@ -33,7 +33,7 @@ if ALL_MODELS:
                 if not model.startswith("_") and model not in MODELS:
                     MODELS.append(model)
 s = ""
-labels = []
+# labels = []
 for name in MODELS:
     # ensure model subfolder
     if os.path.exists(f"model_{name}"):
@@ -41,12 +41,15 @@ for name in MODELS:
             with open(f"model_{name}/test_results.pt", "rb") as file:
                 s += name + "_"
                 results = pickle.load(file)
-                dist = (
-                    np.array(results["total_crates"]) - np.array(results["crates"])
-                ) / np.array(results["total_crates"])
+                # dist = (
+                #     np.array(results["total_crates"]) - np.array(results["crates"])
+                # ) / np.array(results["total_crates"])
+                dist = np.array(results["points"])
+                print(len(dist))
+                print(dist)
                 dists.append(dist)
-                winrate = np.count_nonzero(dist == 1) / len(dist)
-                labels.append(f"{name}, wr: {round(winrate*100,1)}%")
+                # winrate = np.count_nonzero(dist == 1) / len(dist)
+                # labels.append(f"{name}, wr: {round(winrate*100,1)}%")
                 # names.append(name)
                 print(">%s %.3f (%.3f)" % (name, np.mean(dist), np.std(dist)))
         else:
@@ -56,10 +59,10 @@ for name in MODELS:
 # plt.style.use('seaborn-whitegrid')
 plt.grid(axis="y")
 medianprops = dict(linestyle="-", linewidth=2.5, color="firebrick")
-plt.boxplot(dists, labels=labels, showmeans=True, medianprops=medianprops)
+plt.boxplot(dists, showmeans=True, medianprops=medianprops)
 plt.xlabel("Model")
-plt.ylabel("Crate Destroyed Percentage")
-plt.title("Crate Destroyed Percentage Distributions for Different Reward Models")
+plt.ylabel("Points")
+plt.title("Points")
 
 # ensure meta/plots subfolder
 if not os.path.exists("meta/plots"):

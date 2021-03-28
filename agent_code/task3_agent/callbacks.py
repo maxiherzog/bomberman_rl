@@ -5,9 +5,9 @@ import numpy as np
 from random import shuffle
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-EPSILON_MAX = 0.2
+EPSILON_MAX = 0.1
 EPSILON_MIN = 0.025
-EPSILON_DECAY = 0.99992
+EPSILON_DECAY = 0.9999
 # EPSILON_MIN reached after about 7000 its
 
 
@@ -32,7 +32,7 @@ def setup(self):
     # TEST BENCH CODE
     if "TESTING" in os.environ:
         if os.environ["TESTING"] == "YES":
-            self.test_results = {"crates": [], "total_crates": []}
+            self.test_results = {"crates": [], "total_crates": [], "points": []}
             self.model_suffix = "_" + os.environ["MODELNAME"]
             self.total_crates = 0
             self.last_crates = 0
@@ -71,6 +71,11 @@ def act(self, game_state: dict) -> str:
     # TEST BENCH CODE
     if "TESTING" in os.environ:
         if os.environ["TESTING"] == "YES":
+            if game_state["step"] == 1:
+                self.test_results["points"].append(game_state["self"][1])
+            else:
+                self.test_results["points"][-1] = game_state["self"][1]
+
             crates = np.count_nonzero(game_state["field"] == 1)
             if self.total_crates == 0 or self.last_crates < crates:
                 self.total_crates = crates
@@ -264,12 +269,14 @@ def state_to_features(game_state: dict) -> np.array:
             POI_dist = 0
         else:
             founds = sorted(found_targets, key=lambda tar: tar[2])
-            for f in founds:
-                if f[1] == 1: #COIN
-                    found = f
-                    break
-            else:
-                found = founds[0]
+            # for f in founds:
+            #     if f[2] < 4:
+            #
+            #     if f[1] == 1: #COIN
+            #         found = f
+            #         break
+            # else:
+            found = founds[0]
             POI_position = found[0]
             POI_type = found[1]
     # compute POI vector and dist
@@ -298,7 +305,7 @@ def state_to_features(game_state: dict) -> np.array:
         NEY_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=1)-1  #01234 # 0123
     else:
         NEY_vector = [2,2]
-        NEY_dist = 0  # TODO: Verwirrung II
+        NEY_dist = 3  # TODO: Verwirrung II
 
     bomb_left = int(game_state["self"][2])
     # channels = []
