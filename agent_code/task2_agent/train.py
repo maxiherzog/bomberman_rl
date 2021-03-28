@@ -31,7 +31,7 @@ NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-GAMMA = 0.6
+GAMMA = 0.5
 ALPHA = 0.01
 N = 1  # for n-step TD Q learning
 XP_BUFFER_SIZE = 100  # higher batch size for forest

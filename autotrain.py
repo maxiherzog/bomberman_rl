@@ -8,7 +8,7 @@ Created on Mon Mar 22 03:03:23 2021
 import os
 import subprocess
 
-ROUNDS = 1000
+ROUNDS = 3000
 # os.system('cd ../..')
 # os.system(f'python main.py play --agents task2_agent --no-gui --n-rounds {ROUNDS}')
 import sys
