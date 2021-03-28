@@ -22,14 +22,14 @@ EVADED_BOMB = "EVADED_BOMB"
 NO_CRATE_OR_OPPONENT_DESTROYED = "NO_CRATE_OR_OPPONENT_DESTROYED"
 NO_BOMB = "NO_BOMB"
 BLOCKED_SELF_IN_UNSAFE_SPACE = "BLOCKED_SELF_IN_UNSAFE_SPACE"
-DROPPED_BOMB_NEXT_TO_CRATE = "DROPPED_BOMB_NEXT_TO_CRATE"
+DROPPED_BOMB_NEXT_TO_CRATE_OR_ENEMY = "DROPPED_BOMB_NEXT_TO_CRATE_OR_ENEMY"
 NEW_PLACE = "NEW_PLACE"
 NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 
 # Hyper parameters -- DO modify
 # TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 # RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-GAMMA = 0.90
+GAMMA = 0.6
 ALPHA = 0.01
 # N = 1  # for n-step TD Q learning
 # XP_BUFFER_SIZE = 100  # higher batch size for forest
@@ -39,16 +39,16 @@ ALPHA = 0.01
 
 EXPLOIT_SYMMETRY = True
 GAME_REWARDS = {
-    e.KILLED_OPPONENT: 2,
-    e.COIN_COLLECTED: 1,
+    e.KILLED_OPPONENT: 3,
+    e.COIN_COLLECTED: 2,
     e.INVALID_ACTION: -0.1,
     e.CRATE_DESTROYED: 0.4,
     e.KILLED_SELF: -0.5,
-    e.BOMB_DROPPED: 0.02,
-    DROPPED_BOMB_NEXT_TO_CRATE: 0.08,
+    e.BOMB_DROPPED: -0.2,
+    DROPPED_BOMB_NEXT_TO_CRATE_OR_ENEMY: 0.4,
     EVADED_BOMB: 0.1,
-    NO_CRATE_OR_OPPONENT_DESTROYED: -0.7,
-    NO_ACTIVE_BOMB: -0.07,
+    NO_CRATE_OR_OPPONENT_DESTROYED: -0.3,
+    #NO_ACTIVE_BOMB: -0.07,
     BLOCKED_SELF_IN_UNSAFE_SPACE: -0.7,
 }
 
@@ -110,7 +110,16 @@ def setup_training(self):
         self.Q[:, :, :, :, :, :, :, 0, 1, :, :, 3, 1, 5] += -2
         # or near coin
         self.Q[:, :, :, :, :, :, :, 1, :, :, :, 3, 1, 5] += -2
-        # # walk towards crates
+        # walk towards crates and coins in straight lines
+        self.Q[1, :, :, :, :, :, :2, 1, :, :, :, 3, 1, 0] += 1
+        self.Q[:, 1, :, :, :, 3:, :, 1, :, :, :, 3, 1, 1] += 1
+        self.Q[:, :, 1, :, :, :, 3:, 1, :, :, :, 3, 1, 2] += 1
+        self.Q[:, :, :, 1, :, :2, :, 1, :, :, :, 3, 1, 3] += 1
+
+        self.Q[1, :, :, :, :, :, :2, 0, 1, :, :, 3, 1, 0] += 1
+        self.Q[:, 1, :, :, :, 3:, :, 0, 1, :, :, 3, 1, 1] += 1
+        self.Q[:, :, 1, :, :, :, 3:, 0, 1, :, :, 3, 1, 2] += 1
+        self.Q[:, :, :, 1, :, :2, :, 0, 1, :, :, 3, 1, 3] += 1
         # Q[1, :, :, :, :, :2, 1, 0, 2:, 0] += 1
         # Q[:, 1, :, :, -2:, :, 1, 0, 2:, 1] += 1
         # Q[:, :, 1, :, :, -2:, 1, 0, 2:, 2] += 1
@@ -303,24 +312,25 @@ def game_events_occurred(
 
     old_feat = state_to_features(old_game_state)
     new_feat = state_to_features(new_game_state)
-    # BLOCKED_SELF_IN_UNSAFE_SPACE
-    if all(new_feat[:5] == 0):
-        events.append(BLOCKED_SELF_IN_UNSAFE_SPACE)
-    if old_feat is not None:
-        if not (old_feat[12] == 1 or new_feat[12] == 1):
+    if(old_game_state is not None):
+        # BLOCKED_SELF_IN_UNSAFE_SPACE
+        if all(new_feat[:5] == 0):
+            events.append(BLOCKED_SELF_IN_UNSAFE_SPACE)
+        if old_feat is not None:
+            if old_feat[12] == 1:
+                events.append(NO_ACTIVE_BOMB)
+        else:
             events.append(NO_ACTIVE_BOMB)
-    else:
-        events.append(NO_ACTIVE_BOMB)
 
-    # if e.MOVED_UP or e.MOVED_DOWN or e.MOVED_LEFT or e.MOVED_RIGHT:
-    #     if new_game_state["self"][0] not in self.visited:
-    #         self.visited.append(new_game_state["self"][3])
-    #         events.append(NEW_PLACE)
+        # if e.MOVED_UP or e.MOVED_DOWN or e.MOVED_LEFT or e.MOVED_RIGHT:
+        #     if new_game_state["self"][0] not in self.visited:
+        #         self.visited.append(new_game_state["self"][3])
+        #         events.append(NEW_PLACE)
 
-    # DROPPED_BOMB_NEXT_TO_CRATE
-    if e.BOMB_DROPPED in events:
-        if old_feat[7] == 0 and old_feat[8] == 0:
-            events.append(DROPPED_BOMB_NEXT_TO_CRATE)
+        # DROPPED_BOMB_NEXT_TO_CRATE
+        if e.BOMB_DROPPED in events:
+            if (old_feat[7] == 0 and old_feat[8] == 0) or (old_feat[11]<3):
+                events.append(DROPPED_BOMB_NEXT_TO_CRATE_OR_ENEMY)
 
     if e.KILLED_OPPONENT in events:
         self.kill_counter += 1
