@@ -34,12 +34,12 @@ NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 GAMMA = 0.5
 ALPHA = 0.01
 N = 1  # for n-step TD Q learning
-XP_BUFFER_SIZE = 100  # higher batch size for forest
+XP_BUFFER_SIZE = 10  # higher batch size for forest
 N_ESTIMATORS = 100
 MAX_DEPTH = 40
 
-FIRST_WEIGHT = 0.1
-MU = 0.5
+FIRST_WEIGHT = 0.8
+MU = 0.25
 
 EXPLOIT_SYMMETRY = True
 GAME_REWARDS = {
@@ -405,6 +405,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.analysis_data["length"].append(last_game_state["step"])
     self.analysis_data["bombs"].append(self.bombs_counter)
     self.analysis_data["useless_bombs"].append(self.useless_bombs_counter)
+    self.analysis_data["reward"].append(tot_reward)
 
     # RESET Counters
     self.crate_counter = 0
@@ -441,7 +442,6 @@ def store(self):
 
 
 def updateQMatrix(self):
-    tot_reward = 0
     for t in self.transitions:
         if t.action != None:
             tot_reward += t.reward
@@ -458,7 +458,7 @@ def updateQMatrix(self):
                 self.Q[tuple(rot)] += ALPHA * (
                         t.reward + GAMMA * V - self.Q[tuple(origin_vec)]
                 )
-    self.analysis_data["reward"].append(tot_reward)
+
 
 
 def updateQ(self):
