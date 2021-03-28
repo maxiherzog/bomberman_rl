@@ -28,11 +28,12 @@ def setup(self):
 
     ### CHANGE ONLY IF YOU KNOW WHAT YOU ARE DOING, no sync with training!
     self.model_suffix = ""
+    self.folder = "autotrain_7/"
 
     # TEST BENCH CODE
     if "TESTING" in os.environ:
         if os.environ["TESTING"] == "YES":
-            self.test_results = {"crates": [], "total_crates": []}
+            self.test_results = {"crates": [], "total_crates": [], "points": []}
             self.model_suffix = "_" + os.environ["MODELNAME"]
             self.total_crates = 0
             self.last_crates = 0
@@ -43,18 +44,16 @@ def setup(self):
             EPSILON_MIN = float(os.environ["EPSILON_MIN"])
             EPSILON_MAX = float(os.environ["EPSILON_MAX"])
             EPSILON_DECAY = float(os.environ["EPSILON_DECAY"])
-    if self.train or not os.path.isfile(f"model{self.model_suffix}/model.pt"):
+    if self.train or not os.path.isfile(f"{self.folder}model{self.model_suffix}/model.pt"):
         # train mode or play mode without existing model
         if os.path.isfile(f"model{self.model_suffix}/model.pt"):
-            with open(f"model{self.model_suffix}/model.pt", "rb") as file:
+            with open(f"{self.folder}model{self.model_suffix}/model.pt", "rb") as file:
                 self.model = pickle.load(file)
                 if type(self.model) == np.array:
                     self.regress = False
-                    print(type(self.model))
                     self.Q = self.model
                 else:
                     self.regress = True
-                    print(type(self.model))
                     self.regressor = self.model
 
         self.logger.info("Setting up model from scratch.")
@@ -64,7 +63,7 @@ def setup(self):
         # play mode with existing model
         self.logger.info("Loading model.")
         print("Loading model.")
-        with open(f"model{self.model_suffix}/model.pt", "rb") as file:
+        with open(f"{self.folder}model{self.model_suffix}/model.pt", "rb") as file:
             self.model = pickle.load(file)
             if type(self.model) == np.ndarray:
                 self.regress = False
@@ -96,6 +95,11 @@ def act(self, game_state: dict) -> str:
     # TEST BENCH CODE
     if "TESTING" in os.environ:
         if os.environ["TESTING"] == "YES":
+            if game_state["step"] == 1:
+                self.test_results["points"].append(game_state["self"][1])
+            else:
+                self.test_results["points"][-1] = game_state["self"][1]
+
             crates = np.count_nonzero(game_state["field"] == 1)
             if self.total_crates == 0 or self.last_crates < crates:
                 self.total_crates = crates
@@ -104,8 +108,7 @@ def act(self, game_state: dict) -> str:
             elif self.last_crates > crates:
                 self.test_results["crates"][-1] = crates
             self.last_crates = crates
-
-            with open(f"model{self.model_suffix}/test_results.pt", "wb") as file:
+            with open(f"{self.folder}model{self.model_suffix}/test_results.pt", "wb") as file:
                 pickle.dump(self.test_results, file)
 
     # ->EPSILON greedy
