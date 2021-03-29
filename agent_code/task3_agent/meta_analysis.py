@@ -62,13 +62,15 @@ medianprops = dict(linestyle="-", linewidth=2.5, color="firebrick")
 #plt.boxplot(dists, showmeans=True, medianprops=medianprops)
 bins = range(min(dists[0]), max(dists[0]) + 1)
 plt.hist(dists[0], bins=bins, label="our agent")
+plt.axvline(np.mean(dists[0]), ymin=0, ymax=1,ls="--", color="green")
 with open("../rule_based_agent/points.pt", "rb") as file:
     rule_based = pickle.load(file)
     plt.hist(rule_based, bins=bins, label="rule based agent",alpha=0.6)
+    plt.axvline(np.mean(rule_based), ymin=0, ymax=1,ls="--", color="tomato")
 plt.xlabel("Points")
 plt.ylabel("Games")
 plt.legend()
-plt.title("Points")
+plt.title("Our Agent versus the Rule Based Agent")
 
 # ensure meta/plots subfolder
 if not os.path.exists("meta/plots"):

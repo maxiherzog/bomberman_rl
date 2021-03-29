@@ -3,6 +3,7 @@ import pickle
 import random
 import numpy as np
 from random import shuffle
+import copy
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
 EPSILON_MAX = 0.1
@@ -48,7 +49,6 @@ def setup(self):
             self.Q = pickle.load(file)
 
 
-
 def act(self, game_state: dict) -> str:
     """
     Your agent should parse the input, think, and take a decision.
@@ -67,7 +67,8 @@ def act(self, game_state: dict) -> str:
     self.logger.debug(f"save:{feat[:5]}")
     self.logger.debug(f"POI:{feat[5:7]}, type:{feat[7]}, distance:{feat[8]}")
     self.logger.debug(f"NEY:{feat[9:11]}, distance:{feat[11]}")
-    self.logger.debug(f"bomb:{feat[12]}")
+    self.logger.debug(f"NEY2:{feat[12:14]}")
+    self.logger.debug(f"bomb:{feat[14]}")
     # TEST BENCH CODE
     if "TESTING" in os.environ:
         if os.environ["TESTING"] == "YES":
@@ -157,7 +158,7 @@ def state_to_features(game_state: dict) -> np.array:
     # compute save (danger level for nearest bombs)
     bombs = game_state["bombs"]
     free_space = game_state["field"] == 0
-    for bomb in bombs: # TODO: gegnerposition entfernen
+    for bomb in bombs:
         free_space[tuple(bomb[0])] = False
     for other in game_state["others"]:
         free_space[tuple(other[3])] = False
@@ -231,36 +232,61 @@ def state_to_features(game_state: dict) -> np.array:
     frontier = [start]
     parent_dict = {start: start}
     dist_so_far = {start: 0}
-    found_targets = []  # list of tuples (*coord, type)
+    directions_travelled = {start: [False, False, False, False]}
+    found_targets = []  # list of tuples (*coord, type, dist, travelled)
 
     free_space = game_state["field"] == 0
 
     while len(frontier) > 0:
         current = frontier.pop(0)
         if current in game_state["coins"]:
-            found_targets.append([current, 1, dist_so_far[current]])
+            found_targets.append(
+                [current, 1, dist_so_far[current], directions_travelled[current]]
+            )
 
         # Add unexplored free neighboring tiles to the queue in a random order
         x, y = current
         neighbors = [
             (x, y)
-            for (x, y) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+            for (x, y) in [
+                (x + x_off[0], y + y_off[0]),
+                (x + x_off[1], y + y_off[1]),
+                (x + x_off[2], y + y_off[2]),
+                (x + x_off[3], y + y_off[3]),
+            ]
             if free_space[x, y]
         ]
         all_neighbors = [
-            (x, y) for (x, y) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+            (x, y)
+            for (x, y) in [
+                (x + x_off[0], y + y_off[0]),
+                (x + x_off[1], y + y_off[1]),
+                (x + x_off[2], y + y_off[2]),
+                (x + x_off[3], y + y_off[3]),
+            ]
         ]
         shuffle(all_neighbors)
         for neighbor in all_neighbors:
             if game_state["field"][neighbor] == 1:  # CRATE
-                found_targets.append([neighbor, 0, dist_so_far[current] + 1])
+                found_targets.append(
+                    [
+                        neighbor,
+                        0,
+                        dist_so_far[current] + 1,
+                        directions_travelled[current],
+                    ]
+                )
 
         shuffle(neighbors)
         for neighbor in neighbors:
             if neighbor not in parent_dict:
+                i = neighbors.index(neighbor)
                 frontier.append(neighbor)
                 parent_dict[neighbor] = current
                 dist_so_far[neighbor] = dist_so_far[current] + 1
+                dirs = copy.deepcopy(directions_travelled[current])
+                dirs[i] = True
+                directions_travelled[neighbor] = dirs
 
         # print(found_targets)
         if len(found_targets) == 0:
@@ -269,14 +295,14 @@ def state_to_features(game_state: dict) -> np.array:
             POI_dist = 0
         else:
             founds = sorted(found_targets, key=lambda tar: tar[2])
-            # for f in founds:
-            #     if f[2] < 4:
-            #
-            #     if f[1] == 1: #COIN
-            #         found = f
-            #         break
-            # else:
-            found = founds[0]
+            for f in founds:  # priotorize coins
+                if f[1] == 1:  # COIN
+                    if np.count_nonzero(np.array(f[3])) == 1:
+                        if f[2] < 12:
+                            found = f
+                            break
+            else:
+                found = founds[0]
             POI_position = found[0]
             POI_type = found[1]
     # compute POI vector and dist
@@ -286,25 +312,43 @@ def state_to_features(game_state: dict) -> np.array:
         bigger = np.argmax(np.abs(dist))
         POI_vector[bigger] *= 2
     POI_vector += 2
-    POI_dist = np.clip(np.sum(np.abs(dist)), a_max=2, a_min=1)-1  # 012
+    POI_dist = np.clip(np.sum(np.abs(dist)), a_max=2, a_min=1) - 1  # 012
     # compute Nearest enemy (NEY) vector and dist
     if game_state["others"] != []:
-        manhattan_min = np.infty
+        # manhattan = np.sum(
+        #     np.abs(np.array(other[3]) - np.array(game_state["self"][3]))
+        # )
+        nearest_enemies = sorted(
+            game_state["others"],
+            key=lambda tar: np.sum(
+                np.abs(np.array(tar[3]) - np.array(game_state["self"][3]))
+            ),
+        )
+        nearest_enemy = nearest_enemies[0]
 
-        for other in game_state["others"]:
-            manhattan =  np.sum(np.abs(np.array(other[3]) - np.array(game_state["self"][3])))
-            if manhattan <= manhattan_min:
-                nearest_enemy = other
-                manhattan_min = manhattan
-        dist = other[3] - np.array(game_state["self"][3])
+        # for other in game_state["others"]:
+        #
+        #     if manhattan <= manhattan_min:
+        #         nearest_enemy = other
+        #         manhattan_min = manhattan
+
+        dist = nearest_enemy[3] - np.array(game_state["self"][3])
         NEY_vector = np.sign(dist)
+
         if dist[0] != dist[1]:
             bigger = np.argmax(np.abs(dist))
             NEY_vector[bigger] *= 2
         NEY_vector += 2
-        NEY_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=1)-1  #01234 # 0123
+        NEY_dist = np.clip(np.sum(np.abs(dist)), a_max=4, a_min=1) - 1  # 01234 # 0123
+
+        if len(nearest_enemies) >= 2:
+            NEY2 = nearest_enemies[1]
+            NEY2_vector = np.sign(NEY2[3] - np.array(game_state["self"][3])) + 1
+        else:
+            NEY2_vector = [1, 1]
     else:
-        NEY_vector = [2,2]
+        NEY_vector = [2, 2]
+        NEY2_vector = [1, 1]
         NEY_dist = 3  # TODO: Verwirrung II
 
     bomb_left = int(game_state["self"][2])
@@ -315,7 +359,16 @@ def state_to_features(game_state: dict) -> np.array:
     # and return them as a vector
     # 2 2 2 2 2, 3 3, 2, 3 | 3 3, 5
     return np.concatenate(
-        (save, POI_vector, [POI_type], [POI_dist], NEY_vector, [NEY_dist], [bomb_left])
+        (
+            save,
+            POI_vector,
+            [POI_type],
+            [POI_dist],
+            NEY_vector,
+            [NEY_dist],
+            NEY2_vector,
+            [bomb_left],
+        )
     ).astype(int)
     # stacked_channels.reshape(-1)
 
@@ -374,7 +427,9 @@ def rotate(index_vector):
         -index_vector[10] + 4,  # NEY vector y->-x
         index_vector[9],  # x->y
         index_vector[11],  # NEY distance invariant
-        index_vector[12],  # boms_left
+        -index_vector[13] + 2,  # NEY vector y->-x
+        index_vector[12],  # NEY vector y->-x
+        index_vector[14],  # boms_left
         action_index,
     )
     # if visual_feedback:
@@ -418,8 +473,10 @@ def flip(index_vector):
         index_vector[8],  # POI distance invariant
         -index_vector[9] + 4,  # NEY vector x->-x
         index_vector[10],  # y->y
-        index_vector[11], # NEY distance invariant
-        index_vector[12],  # boms_left
+        index_vector[11],  # NEY distance invariant
+        -index_vector[12] + 2,  # NEY vector y->-x
+        index_vector[13],  # NEY vector y->-x
+        index_vector[14],  # boms_left
         action_index,
     )
     # if visual_feedback:

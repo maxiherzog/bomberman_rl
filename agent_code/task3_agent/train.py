@@ -48,7 +48,7 @@ GAME_REWARDS = {
     DROPPED_BOMB_NEXT_TO_CRATE_OR_ENEMY: 0.4,
     EVADED_BOMB: 0.1,
     NO_CRATE_OR_OPPONENT_DESTROYED: -0.3,
-    #NO_ACTIVE_BOMB: -0.07,
+    # NO_ACTIVE_BOMB: -0.07,
     BLOCKED_SELF_IN_UNSAFE_SPACE: -0.7,
 }
 
@@ -85,7 +85,7 @@ def setup_training(self):
         self.epsilon = EPSILON_MIN
     else:
         self.logger.debug("Initializing Q")
-        self.Q = np.zeros([2, 2, 2, 2, 2, 5, 5, 2, 2, 5, 5, 4, 2, len(ACTIONS)])
+        self.Q = np.zeros([2, 2, 2, 2, 2, 5, 5, 2, 2, 5, 5, 4, 3, 3, 2, len(ACTIONS)])
         print(np.prod(self.Q.shape))
 
         # if "AUTOTRAIN" in os.environ:
@@ -95,52 +95,42 @@ def setup_training(self):
 
         # (save, POI_vector, [POI_type], [POI_dist], NEY_vector, [NEY_dist], [bomb_left])
         # dont run into walls
-        self.Q[0, :, :, :, :, :, :, :, :, :, :, :, :, 0] += -2
-        self.Q[:, 0, :, :, :, :, :, :, :, :, :, :, :, 1] += -2
-        self.Q[:, :, 0, :, :, :, :, :, :, :, :, :, :, 2] += -2
-        self.Q[:, :, :, 0, :, :, :, :, :, :, :, :, :, 3] += -2
+        self.Q[0, :, :, :, :, :, :, :, :, :, :, :, :, :, :, 0] += -2
+        self.Q[:, 0, :, :, :, :, :, :, :, :, :, :, :, :, :, 1] += -2
+        self.Q[:, :, 0, :, :, :, :, :, :, :, :, :, :, :, :, 2] += -2
+        self.Q[:, :, :, 0, :, :, :, :, :, :, :, :, :, :, :, 3] += -2
         #
         # # drop Bomb when near crate
-        self.Q[:, :, :, :, :, :, :, 0, 0, :, :, :, 1, 5] += 2
+        self.Q[:, :, :, :, :, :, :, 0, 0, :, :, :, :, :, 1, 5] += 2
 
         # # dont drop Bomb when already having one bomb
-        self.Q[:, :, :, :, :, :, :, :, :, :, :, :, 0, 5] += -2
+        self.Q[:, :, :, :, :, :, :, :, :, :, :, :, :, :, 0, 5] += -2
         #
         # dont drop bomb when not near crate or enemy
-        self.Q[:, :, :, :, :, :, :, 0, 1, :, :, 3, 1, 5] += -2
+        self.Q[:, :, :, :, :, :, :, 0, 1, :, :, 3, :, :, 1, 5] += -2
         # or near coin
-        self.Q[:, :, :, :, :, :, :, 1, :, :, :, 3, 1, 5] += -2
+        self.Q[:, :, :, :, :, :, :, 1, :, :, :, 3, :, :, 1, 5] += -2
         # walk towards crates and coins in straight lines
-        self.Q[1, :, :, :, :, :, :2, 1, :, :, :, 3, 1, 0] += 1
-        self.Q[:, 1, :, :, :, 3:, :, 1, :, :, :, 3, 1, 1] += 1
-        self.Q[:, :, 1, :, :, :, 3:, 1, :, :, :, 3, 1, 2] += 1
-        self.Q[:, :, :, 1, :, :2, :, 1, :, :, :, 3, 1, 3] += 1
+        self.Q[1, :, :, :, :, 2, :2, 1, :, :, :, 3, :, :, :, 0] += 1
+        self.Q[:, 1, :, :, :, 3:, 2, 1, :, :, :, 3, :, :, :, 1] += 1
+        self.Q[:, :, 1, :, :, 2, 3:, 1, :, :, :, 3, :, :, :, 2] += 1
+        self.Q[:, :, :, 1, :, :2, 2, 1, :, :, :, 3, :, :, :, 3] += 1
 
-        self.Q[1, :, :, :, :, :, :2, 0, 1, :, :, 3, 1, 0] += 1
-        self.Q[:, 1, :, :, :, 3:, :, 0, 1, :, :, 3, 1, 1] += 1
-        self.Q[:, :, 1, :, :, :, 3:, 0, 1, :, :, 3, 1, 2] += 1
-        self.Q[:, :, :, 1, :, :2, :, 0, 1, :, :, 3, 1, 3] += 1
-        # Q[1, :, :, :, :, :2, 1, 0, 2:, 0] += 1
-        # Q[:, 1, :, :, -2:, :, 1, 0, 2:, 1] += 1
-        # Q[:, :, 1, :, :, -2:, 1, 0, 2:, 2] += 1
-        # Q[:, :, :, 1, :2, :, 1, 0, 2:, 3] += 1
-        #
-        # # walk towards coins
-        # Q[1, :, :, :, :, :2, 1, 1, :, 0] += 1
-        # Q[:, 1, :, :, -2:, :, 1, 1, :, 1] += 1
-        # Q[:, :, 1, :, :, -2:, 1, 1, :, 2] += 1
-        # Q[:, :, :, 1, :2, :, 1, 1, :, 3] += 1
+        self.Q[1, :, :, :, :, 2, :2, 0, 1, :, :, 3, :, :, :, 0] += 1
+        self.Q[:, 1, :, :, :, 3:, 2, 0, 1, :, :, 3, :, :, :, 1] += 1
+        self.Q[:, :, 1, :, :, 2, 3:, 0, 1, :, :, 3, :, :, :, 2] += 1
+        self.Q[:, :, :, 1, :, :2, 2, 0, 1, :, :, 3, :, :, :, 3] += 1
 
         # walk away if not on save tile (only if safe)
-        self.Q[1, :, :, :, 0, :, :, :, :, :, :, :, :, 0] += 3
-        self.Q[:, 1, :, :, 0, :, :, :, :, :, :, :, :, 1] += 3
-        self.Q[:, :, 1, :, 0, :, :, :, :, :, :, :, :, 2] += 3
-        self.Q[:, :, :, 1, 0, :, :, :, :, :, :, :, :, 3] += 3
+        self.Q[1, :, :, :, 0, :, :, :, :, :, :, :, :, :, :, 0] += 3
+        self.Q[:, 1, :, :, 0, :, :, :, :, :, :, :, :, :, :, 1] += 3
+        self.Q[:, :, 1, :, 0, :, :, :, :, :, :, :, :, :, :, 2] += 3
+        self.Q[:, :, :, 1, 0, :, :, :, :, :, :, :, :, :, :, 3] += 3
 
         # and dont fucking WAIT
-        self.Q[:, :, :, :, 0, :, :, :, :, :, :, :, :, 4] += -2
+        self.Q[:, :, :, :, 0, :, :, :, :, :, :, :, :, :, :, 4] += -2
         # but consider waiting if safe/dead
-        self.Q[0, 0, 0, 0, 1, :, :, :, :, :, :, :, :, 4] += 2
+        self.Q[0, 0, 0, 0, 1, :, :, :, :, :, :, :, :, :, :, 4] += 2
 
         # xas = []  #  gamestate and action as argument
         # ys = []  # target response
@@ -312,7 +302,7 @@ def game_events_occurred(
 
     old_feat = state_to_features(old_game_state)
     new_feat = state_to_features(new_game_state)
-    if(old_game_state is not None):
+    if old_game_state is not None:
         # BLOCKED_SELF_IN_UNSAFE_SPACE
         if all(new_feat[:5] == 0):
             events.append(BLOCKED_SELF_IN_UNSAFE_SPACE)
@@ -329,7 +319,7 @@ def game_events_occurred(
 
         # DROPPED_BOMB_NEXT_TO_CRATE
         if e.BOMB_DROPPED in events:
-            if (old_feat[7] == 0 and old_feat[8] == 0) or (old_feat[11]<3):
+            if (old_feat[7] == 0 and old_feat[8] == 0) or (old_feat[11] < 3):
                 events.append(DROPPED_BOMB_NEXT_TO_CRATE_OR_ENEMY)
 
     if e.KILLED_OPPONENT in events:
