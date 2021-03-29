@@ -34,11 +34,11 @@ NO_ACTIVE_BOMB = "NO_ACTIVE_BOMB"
 GAMMA = 0.5
 ALPHA = 0.01
 N = 1  # for n-step TD Q learning
-XP_BUFFER_SIZE = 10  # higher batch size for forest
+XP_BUFFER_SIZE = 100  # higher batch size for forest
 N_ESTIMATORS = 100
 MAX_DEPTH = 40
 
-FIRST_WEIGHT = 0.8
+FIRST_WEIGHT = 0.01
 MU = 0.25
 
 EXPLOIT_SYMMETRY = True
@@ -47,6 +47,7 @@ GAME_REWARDS = {
     # e.KILLED_OPPONENT: 5,
     e.COIN_COLLECTED: 1,
     e.INVALID_ACTION: -0.1,
+    e.WAITED: -0.1,
     e.CRATE_DESTROYED: 0.5,
     e.KILLED_SELF: -0.5,
     e.BOMB_DROPPED: 0.02,
@@ -114,7 +115,7 @@ def setup_training(self):
     else:
         if "AUTOTRAIN" in os.environ:
             if os.environ["AUTOTRAIN"] == "YES":
-                global ALPHA, GAMMA, MAX_DEPTH, N_ESTIMATORS, FIRST_WEIGHT
+                global ALPHA, GAMMA, MAX_DEPTH, N_ESTIMATORS, FIRST_WEIGHT, MU
                 ALPHA = float(os.environ["ALPHA"])
                 GAMMA = float(os.environ["GAMMA"])
                 MAX_DEPTH = int(os.environ["MAX_DEPTH"])

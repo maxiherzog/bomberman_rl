@@ -5,10 +5,10 @@ import numpy as np
 from random import shuffle
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-EPSILON_MAX = 0.5
+EPSILON_MAX = 0.025
 EPSILON_MIN = 0.025
-EPSILON_DECAY = 0.999
-# EPSILON_MIN reached after about 3000 its
+EPSILON_DECAY = 0.9995
+# EPSILON_MIN  reached after about 3000 its for 0.999
 
 
 def setup(self):
