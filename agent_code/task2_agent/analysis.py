@@ -38,11 +38,11 @@ def average_every(x, w):
 
 
 BATCHES = 20
-
+folder = "autotrain_5/"
 MODELS = []
 parameters = []
-for file in sorted(os.listdir(".")):
-    if os.path.isdir(file):
+for file in sorted(os.listdir(folder)):
+    if os.path.isdir(folder+file):
         if file.startswith("model_A"):
             model = file[6:]
             if not model.startswith("_") and model not in MODELS:
@@ -69,15 +69,17 @@ axis = [
     "Amount of Bombs Dropped",
     "Number of Bombs That Did Not Destroy Any Crates",
 ]
-episodes = 3000
+
+
+episodes = 1000
 data_collection = -1 * np.ones((len(title), len(MODELS), episodes))
 for m, MODEL in enumerate(MODELS):
     print(MODEL)
     # ensure analysis subfolder
-    if not os.path.exists(f"model_{MODEL}/plots"):
-        os.makedirs(f"model_{MODEL}/plots")
+    if not os.path.exists(f"{folder}model_{MODEL}/plots"):
+        os.makedirs(f"{folder}model_{MODEL}/plots")
 
-    with open(f"model_{MODEL}/analysis_data.pt", "rb") as file:
+    with open(f"{folder}model_{MODEL}/analysis_data.pt", "rb") as file:
 
         analysis_data = pickle.load(file)
         wins = None
@@ -135,7 +137,7 @@ for m, MODEL in enumerate(MODELS):
                 plt.legend(loc="best")
                 plt.title(title[i])
                 plt.suptitle(fr" $\alpha={parameters[m][0]} $ $\gamma={parameters[m][1]}$")
-                plt.savefig(f"model_{MODEL}/plots/{key[i]}.pdf")
+                plt.savefig(f"{folder}model_{MODEL}/plots/{key[i]}.pdf")
                 plt.show()
             # PLOT Qsum
             # name = ["", "_move", "_bomb", "_wait"]
@@ -152,7 +154,7 @@ for m, MODEL in enumerate(MODELS):
                 plt.xlabel("Episode")
                 plt.ylabel("$\Sigma_{\{(s, a)\}}Q_{(s,a)}$")
                 plt.title("Sum of All $Q$ Values")
-                plt.savefig(f"model_{MODEL}/plots/Qsum.pdf")
+                plt.savefig(f"{folder}model_{MODEL}/plots/Qsum.pdf")
                 plt.show()
 
             # PLOT Q for one situation
@@ -188,6 +190,6 @@ for i in range(len(title)):
     plt.legend(loc="best")
     plt.title(title[i])
     #plt.suptitle(fr" $\alpha={parameters[m][0]} $ $\gamma={parameters[m][1]}$")
-    plt.savefig(f"comparison_plots/{key[i]}.pdf")
+    plt.savefig(f"{folder}comparison_plots/{key[i]}.pdf")
     plt.show()
 

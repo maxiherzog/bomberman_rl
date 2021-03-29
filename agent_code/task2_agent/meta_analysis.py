@@ -25,7 +25,7 @@ dists = []
 ALL_MODELS = True
 MODELS = []
 
-folder = "autotrain_7_longerBench/"
+folder = "autotrain_4/"
 
 if ALL_MODELS:
     print(os.listdir(f"{folder}"))
@@ -62,9 +62,9 @@ for name in MODELS:
                     pass
 
         else:
-            print(f"FOUND NO MODEL NAMED {name}")
+            print(f"FOUND NO MODEL NAMED {name}",file)
     else:
-        print(f"FOUND NO MODEL NAMED {name}")
+        print(f"FOUND NO MODEL NAMED {name}",file)
 # plt.style.use('seaborn-whitegrid')
 plt.grid(axis="y")
 medianprops = dict(linestyle="-", linewidth=2.5, color="firebrick")
@@ -78,5 +78,5 @@ plt.title("Number of Collected Coins for Different Reward Models")
 # ensure meta/plots subfolder
 if not os.path.exists(f"{folder}meta/plots"):
     os.makedirs(f"{folder}meta/plots")
-plt.savefig(f"{folder}meta/plots/{s}crate_percentage_boxplot.pdf")
+plt.savefig(f"{folder}meta/plots/{s}coin_collected_boxplot.pdf")
 plt.show()
