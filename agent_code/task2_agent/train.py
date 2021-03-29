@@ -419,10 +419,10 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.rounds_played += 1
     if self.regress:
         if self.rounds_played % XP_BUFFER_SIZE == 0:
-            updateQMatrix(self)
+            updateQ(self)
             self.transitions = deque(maxlen=None)
     else:
-        updateQ(self)
+        updateQMatrix(self)
         self.transitions = deque(maxlen=None)  # clear transitions -> ready for next game
 
     if last_game_state["round"] % STORE_FREQ == 0:
